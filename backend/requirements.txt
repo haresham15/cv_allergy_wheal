@@ -4,3 +4,7 @@ opencv-contrib-python>=4.8.0
 numpy>=1.24
 python-multipart>=0.0.6
 pillow>=10.0.0
+imutils>=0.5.4
+torch>=2.0.0
+torchvision>=0.15.0
+segment-anything @ git+https://github.com/facebookresearch/segment-anything.git

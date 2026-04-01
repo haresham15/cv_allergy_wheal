@@ -1,0 +1,352 @@
+{
+  "tests": [
+    {
+      "name": "Health Check",
+      "status": "PASS",
+      "details": {
+        "status": "active",
+        "version": "0.1.0"
+      }
+    },
+    {
+      "name": "Invalid File Type Rejection",
+      "status": "PASS",
+      "details": {
+        "status_code": 400
+      }
+    },
+    {
+      "name": "Analyze Without Grid",
+      "status": "PASS",
+      "details": {
+        "elapsed_s": 72.1,
+        "total_wheals": 11,
+        "avg_diameter_mm": 10.23,
+        "max_diameter_mm": 16.19,
+        "severity_breakdown": {
+          "normal": 0,
+          "mild": 4,
+          "severe": 7
+        },
+        "calibration_detected": true,
+        "calibration_method": "aruco",
+        "scale_ppm": 3.95,
+        "results": [
+          {
+            "id": 1,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 11.31,
+            "area_mm2": 98.38,
+            "severity": "severe",
+            "confidence": 1.014,
+            "center": [
+              199,
+              119
+            ]
+          },
+          {
+            "id": 2,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 16.19,
+            "area_mm2": 198.81,
+            "severity": "severe",
+            "confidence": 0.961,
+            "center": [
+              449,
+              229
+            ]
+          },
+          {
+            "id": 3,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 9.23,
+            "area_mm2": 66.02,
+            "severity": "severe",
+            "confidence": 0.988,
+            "center": [
+              449,
+              229
+            ]
+          },
+          {
+            "id": 4,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 7.91,
+            "area_mm2": 47.3,
+            "severity": "mild",
+            "confidence": 0.984,
+            "center": [
+              199,
+              229
+            ]
+          },
+          {
+            "id": 5,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 13.43,
+            "area_mm2": 137.93,
+            "severity": "severe",
+            "confidence": 0.942,
+            "center": [
+              200,
+              230
+            ]
+          },
+          {
+            "id": 6,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 10.35,
+            "area_mm2": 82.23,
+            "severity": "severe",
+            "confidence": 0.938,
+            "center": [
+              199,
+              339
+            ]
+          },
+          {
+            "id": 7,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 10.39,
+            "area_mm2": 82.23,
+            "severity": "severe",
+            "confidence": 0.999,
+            "center": [
+              449,
+              339
+            ]
+          },
+          {
+            "id": 8,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 6.28,
+            "area_mm2": 31.02,
+            "severity": "mild",
+            "confidence": 0.848,
+            "center": [
+              199,
+              339
+            ]
+          },
+          {
+            "id": 9,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 7.46,
+            "area_mm2": 40.44,
+            "severity": "mild",
+            "confidence": 0.878,
+            "center": [
+              199,
+              449
+            ]
+          },
+          {
+            "id": 10,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 12.63,
+            "area_mm2": 116.26,
+            "severity": "severe",
+            "confidence": 0.926,
+            "center": [
+              449,
+              449
+            ]
+          },
+          {
+            "id": 11,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 7.38,
+            "area_mm2": 42.11,
+            "severity": "mild",
+            "confidence": 0.98,
+            "center": [
+              449,
+              450
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Analyze With Allergen Grid",
+      "status": "PASS",
+      "details": {
+        "elapsed_s": 96.0,
+        "total_wheals": 11,
+        "allergens_assigned": 8,
+        "results": [
+          {
+            "id": 1,
+            "allergen": "Histamine (Control+)",
+            "grid_position": "A1",
+            "diameter_mm": 11.31,
+            "area_mm2": 98.38,
+            "severity": "severe",
+            "confidence": 1.014,
+            "center": [
+              199,
+              119
+            ]
+          },
+          {
+            "id": 2,
+            "allergen": "Cat Dander",
+            "grid_position": "B2",
+            "diameter_mm": 16.19,
+            "area_mm2": 198.81,
+            "severity": "severe",
+            "confidence": 0.961,
+            "center": [
+              449,
+              229
+            ]
+          },
+          {
+            "id": 3,
+            "allergen": "Saline (Control-)",
+            "grid_position": "A2",
+            "diameter_mm": 9.23,
+            "area_mm2": 66.02,
+            "severity": "severe",
+            "confidence": 0.988,
+            "center": [
+              449,
+              229
+            ]
+          },
+          {
+            "id": 4,
+            "allergen": "Dust Mite",
+            "grid_position": "B1",
+            "diameter_mm": 7.91,
+            "area_mm2": 47.3,
+            "severity": "mild",
+            "confidence": 0.984,
+            "center": [
+              199,
+              229
+            ]
+          },
+          {
+            "id": 5,
+            "allergen": "Dog Dander",
+            "grid_position": "C1",
+            "diameter_mm": 13.43,
+            "area_mm2": 137.93,
+            "severity": "severe",
+            "confidence": 0.942,
+            "center": [
+              200,
+              230
+            ]
+          },
+          {
+            "id": 6,
+            "allergen": "Tree Pollen",
+            "grid_position": "D1",
+            "diameter_mm": 10.35,
+            "area_mm2": 82.23,
+            "severity": "severe",
+            "confidence": 0.938,
+            "center": [
+              199,
+              339
+            ]
+          },
+          {
+            "id": 7,
+            "allergen": "Peanut",
+            "grid_position": "C2",
+            "diameter_mm": 10.39,
+            "area_mm2": 82.23,
+            "severity": "severe",
+            "confidence": 0.999,
+            "center": [
+              449,
+              339
+            ]
+          },
+          {
+            "id": 8,
+            "allergen": "Grass Pollen",
+            "grid_position": "D2",
+            "diameter_mm": 6.28,
+            "area_mm2": 31.02,
+            "severity": "mild",
+            "confidence": 0.848,
+            "center": [
+              199,
+              339
+            ]
+          },
+          {
+            "id": 9,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 7.46,
+            "area_mm2": 40.44,
+            "severity": "mild",
+            "confidence": 0.878,
+            "center": [
+              199,
+              449
+            ]
+          },
+          {
+            "id": 10,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 12.63,
+            "area_mm2": 116.26,
+            "severity": "severe",
+            "confidence": 0.926,
+            "center": [
+              449,
+              449
+            ]
+          },
+          {
+            "id": 11,
+            "allergen": null,
+            "grid_position": null,
+            "diameter_mm": 7.38,
+            "area_mm2": 42.11,
+            "severity": "mild",
+            "confidence": 0.98,
+            "center": [
+              449,
+              450
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Malformed Grid Rejection",
+      "status": "PASS",
+      "details": {
+        "status_code": 400
+      }
+    },
+    {
+      "name": "Oversized File Rejection",
+      "status": "PASS",
+      "details": {
+        "status_code": 413
+      }
+    }
+  ],
+  "errors": [],
+  "warnings": []
+}

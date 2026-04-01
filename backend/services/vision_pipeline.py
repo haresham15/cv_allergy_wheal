@@ -1,65 +1,190 @@
+"""Full vision pipeline orchestrator.
+
+Decode → Preprocess → Calibrate → Segment (SAM) → Map Allergens → Annotate → Return
+"""
+
 import cv2
 import numpy as np
+from typing import Dict, List, Optional
 
-from ..core import utils
-from . import calibration, segmentation
+from ..core import utils, config
+from . import preprocessing, calibration, segmentation, allergen_mapping
 
 
-def process_image(file_bytes: bytes) -> dict:
-    """Orchestrate the processing pipeline for an uploaded image.
+# Severity → colour map (BGR)
+_SEVERITY_COLOURS = {
+    "normal":  (0, 200, 0),     # green
+    "mild":    (0, 220, 255),   # yellow / amber
+    "severe":  (0, 0, 255),     # red
+}
 
-    Steps: decode -> calibration (ppm estimation) -> segmentation (wheals) -> draw -> return JSON-friendly dict
+
+def _draw_annotations(
+    image: np.ndarray,
+    wheals: list,
+    cal: calibration.CalibrationResult,
+    ppm: float,
+) -> np.ndarray:
+    """Draw measurement overlays on a copy of the image."""
+
+    annotated = image.copy()
+
+    # ── Draw ArUco marker outline (blue) ──
+    if cal.detected and cal.marker_corners is not None:
+        pts = cal.marker_corners.astype(np.int32).reshape((-1, 1, 2))
+        cv2.polylines(annotated, [pts], True, (255, 180, 0), 2, cv2.LINE_AA)
+        cx = int(np.mean(cal.marker_corners[:, 0]))
+        cy = int(np.mean(cal.marker_corners[:, 1])) - 12
+        cv2.putText(annotated, f"ArUco ({config.MARKER_SIZE_MM:.0f}mm)",
+                    (cx - 40, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
+                    (255, 180, 0), 1, cv2.LINE_AA)
+
+    # ── Draw each wheal ──
+    for w in wheals:
+        colour = _SEVERITY_COLOURS.get(w.severity, (200, 200, 200))
+        cx, cy = int(w.center[0]), int(w.center[1])
+
+        # Draw contour
+        cv2.drawContours(annotated, [w.contour], -1, colour, 2, cv2.LINE_AA)
+
+        # Draw minimum enclosing circle (dashed feel via thinner line)
+        (_, _), radius = cv2.minEnclosingCircle(w.contour)
+        cv2.circle(annotated, (cx, cy), int(radius), colour, 1, cv2.LINE_AA)
+
+        # Draw centre dot
+        cv2.circle(annotated, (cx, cy), 3, colour, -1, cv2.LINE_AA)
+
+        # Measurement label
+        label = f"#{w.id} {w.diameter_mm:.1f}mm"
+        if hasattr(w, "allergen") and w.allergen:
+            label = f"#{w.id} {w.allergen}: {w.diameter_mm:.1f}mm"
+
+        # White text with dark shadow for readability on any background
+        label_pos = (cx + int(radius) + 6, cy + 4)
+        cv2.putText(annotated, label, label_pos,
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 3, cv2.LINE_AA)
+        cv2.putText(annotated, label, label_pos,
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+
+        # Severity badge
+        sev_pos = (cx + int(radius) + 6, cy + 22)
+        cv2.putText(annotated, w.severity.upper(), sev_pos,
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, colour, 1, cv2.LINE_AA)
+
+    # ── Scale bar (bottom-right) ──
+    bar_mm = 10.0
+    bar_px = int(bar_mm * ppm)
+    h, w_img = annotated.shape[:2]
+    x1 = w_img - bar_px - 20
+    y1 = h - 30
+    cv2.line(annotated, (x1, y1), (x1 + bar_px, y1), (255, 255, 255), 2, cv2.LINE_AA)
+    cv2.line(annotated, (x1, y1 - 5), (x1, y1 + 5), (255, 255, 255), 2)
+    cv2.line(annotated, (x1 + bar_px, y1 - 5), (x1 + bar_px, y1 + 5), (255, 255, 255), 2)
+    cv2.putText(annotated, f"{bar_mm:.0f} mm", (x1, y1 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
+
+    return annotated
+
+
+def _build_composite_mask(image: np.ndarray, wheals: list) -> np.ndarray:
+    """Build a colour mask showing all detected wheal regions."""
+    mask = np.zeros_like(image)
+    for w in wheals:
+        colour = _SEVERITY_COLOURS.get(w.severity, (200, 200, 200))
+        cv2.drawContours(mask, [w.contour], -1, colour, -1)  # filled
+        cv2.drawContours(mask, [w.contour], -1, (255, 255, 255), 1)  # outline
+    return mask
+
+
+def process_image(
+    file_bytes: bytes,
+    allergen_grid: Optional[Dict[str, str]] = None,
+) -> dict:
+    """Orchestrate the full processing pipeline.
+
+    Parameters
+    ----------
+    file_bytes : bytes
+        Raw uploaded image bytes (JPEG/PNG).
+    allergen_grid : dict, optional
+        Allergen mapping, e.g. {"A1": "Peanut", "A2": "Dust Mite"}.
+
+    Returns
+    -------
+    dict ready for JSON serialisation.
     """
-    # decode
+
+    # 1. Decode
     img = utils.bytes_to_cv2_image(file_bytes)
 
-    # calibration (estimate ppm from image dimensions)
-    ppm = calibration.get_ppm(img)
+    # 2. Preprocess
+    prep = preprocessing.preprocess(img)
+    resized = prep["resized"]
 
-    # segmentation (returns wheals and binary mask)
-    wheals, binary_mask = segmentation.find_wheals(img, ppm)
+    # 3. Calibrate (ArUco detection on the resized image)
+    cal = calibration.get_calibration(resized)
+    ppm = cal.ppm
 
-    # draw annotated image
-    annotated = img.copy()
+    # 4. Segment with SAM
+    wheals = segmentation.find_wheals(
+        resized, ppm,
+        marker_corners=cal.marker_corners,
+    )
+
+    # 5. Map allergens (if grid supplied)
+    if allergen_grid:
+        labels, n_rows, n_cols = allergen_mapping.parse_grid_input(allergen_grid)
+        if labels:
+            h, w = resized.shape[:2]
+            allergen_mapping.assign_allergens(
+                wheals, labels, n_rows, n_cols, w, h,
+            )
+
+    # 6. Annotate
+    annotated = _draw_annotations(resized, wheals, cal, ppm)
+    mask_img = _build_composite_mask(resized, wheals)
+
+    # 7. Encode images
+    annotated_b64 = utils.image_to_base64(annotated)
+    segmented_b64 = utils.image_to_base64(mask_img)
+
+    # 8. Build response
     results = []
     for w in wheals:
-        ellipse = w["ellipse"]
-        center = (int(ellipse[0][0]), int(ellipse[0][1]))
-        axes = (int(ellipse[1][0] / 2), int(ellipse[1][1] / 2))
-        angle = int(ellipse[2])
-        cv2.ellipse(annotated, center, axes, angle, 0, 360, (0, 255, 0), 2)
-        cv2.circle(annotated, center, 2, (0, 255, 0), -1)
+        results.append({
+            "id": w.id,
+            "allergen": getattr(w, "allergen", None),
+            "grid_position": getattr(w, "grid_position", None),
+            "diameter_mm": round(w.diameter_mm, 2),
+            "area_mm2": round(w.area_mm2, 2),
+            "severity": w.severity,
+            "confidence": round(w.confidence, 3),
+            "center": [int(w.center[0]), int(w.center[1])],
+        })
 
-        results.append(
-            {
-                "id": int(w.get("id", 0)),
-                "diameter_mm": float(round(w.get("diameter_mm", 0.0), 3)),
-                "severity": (
-                    "mild"
-                    if 3.0 < w.get("diameter_mm", 0.0) < 8.0
-                    else ("severe" if w.get("diameter_mm", 0.0) >= 8.0 else "normal")
-                ),
-                "center_point": [int(w["center_point"][0]), int(w["center_point"][1])],
-                "confidence": float(w.get("confidence", 0.0)),
-            }
-        )
-
-    # Convert binary mask to 3-channel for better visualization
-    mask_colored = cv2.cvtColor(binary_mask, cv2.COLOR_GRAY2BGR)
-    # Highlight detected regions in red
-    mask_colored[binary_mask > 0] = [0, 0, 255]
-
-    annotated_b64 = utils.image_to_base64(annotated)
-    segmented_b64 = utils.image_to_base64(mask_colored)
+    # Summary stats
+    diameters = [r["diameter_mm"] for r in results]
+    severity_counts = {"normal": 0, "mild": 0, "severe": 0}
+    for r in results:
+        severity_counts[r["severity"]] = severity_counts.get(r["severity"], 0) + 1
 
     return {
-        "meta": {"processed_at": utils.now_iso(), "image_quality_score": "unknown"},
-        "calibration": {"detected": False, "scale_ppm": float(ppm), "method": "estimated_from_image_dimensions"},
+        "meta": {
+            "processed_at": utils.now_iso(),
+            "total_wheals": len(results),
+            "avg_diameter_mm": round(float(np.mean(diameters)), 2) if diameters else 0.0,
+            "max_diameter_mm": round(float(max(diameters)), 2) if diameters else 0.0,
+            "severity_breakdown": severity_counts,
+        },
+        "calibration": {
+            "detected": cal.detected,
+            "method": cal.method,
+            "scale_ppm": round(cal.ppm, 4),
+            "marker_id": cal.marker_id,
+        },
         "results": results,
         "visualization": {
             "annotated": annotated_b64,
             "segmented": segmented_b64,
         },
     }
-
-
