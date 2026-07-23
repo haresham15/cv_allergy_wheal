@@ -7,7 +7,7 @@ def run_training(epochs=5, synthetic_size=100):
     script_path = os.path.join(os.path.dirname(__file__), "train_rgbd_unet.py")
     cmd = [
         sys.executable, script_path,
-        "--synthetic",
+        "--finetune-real", "Testphotos/allergy-Testing.jpg",
         "--epochs", str(epochs),
         "--synthetic-size", str(synthetic_size),
         "--batch-size", "4"

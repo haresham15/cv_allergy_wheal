@@ -22,7 +22,11 @@ import argparse
 import os
 import math
 import time
+import sys
 from pathlib import Path
+
+# Add backend directory to path so that 'core' can be found
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import cv2
 import numpy as np
@@ -195,6 +199,60 @@ class SyntheticWhealDataset(Dataset):
 
         return rgb_tensor, depth_tensor, mask_tensor
 
+class RealFinetuneDataset(Dataset):
+    """Loads a real test photo and manual mask to overfit / finetune explicitly."""
+    def __init__(self, img_path, length=20, img_size=256, seed=42):
+        self.length = length
+        self.img_size = img_size
+        self.rng = np.random.RandomState(seed)
+        
+        mask_path = img_path.replace(".jpg", "_mask.png")
+        if not os.path.exists(mask_path):
+            raise FileNotFoundError(f"Manual mask not found at {mask_path}")
+            
+        import cv2
+        img = cv2.imread(img_path)
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        
+        # Preprocess to get the crop/resize the UNet will see
+        from backend.services.preprocessing import preprocess
+        prep = preprocess(img)
+        self.base_rgb = cv2.resize(prep["sam_ready_image"], (img_size, img_size))
+        
+        H, W = prep["sam_ready_image"].shape[:2]
+        self.base_mask = cv2.resize(mask, (W, H), interpolation=cv2.INTER_NEAREST)
+        self.base_mask = cv2.resize(self.base_mask, (img_size, img_size), interpolation=cv2.INTER_NEAREST)
+        self.base_mask = (self.base_mask > 127).astype(np.float32)
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        rgb = self.base_rgb.copy().astype(np.float32)
+        mask = self.base_mask.copy().astype(np.float32)
+        
+        if self.rng.rand() > 0.5:
+            rgb = np.fliplr(rgb)
+            mask = np.fliplr(mask)
+        if self.rng.rand() > 0.5:
+            rgb = np.flipud(rgb)
+            mask = np.flipud(mask)
+            
+        noise = self.rng.normal(0, 5, rgb.shape).astype(np.float32)
+        rgb = np.clip(rgb + noise, 0, 255)
+        
+        H, W = self.img_size, self.img_size
+        depth = np.full((H, W), 0.25, dtype=np.float32)
+        depth[mask > 0] -= 0.005 # Bump is closer (lower depth)
+        
+        rgb = rgb / 255.0
+        depth = np.clip((depth - 0.1) / 0.4, 0, 1)
+        
+        rgb_tensor = torch.from_numpy(rgb.copy().transpose(2, 0, 1)).float()
+        depth_tensor = torch.from_numpy(depth.copy()[np.newaxis]).float()
+        mask_tensor = torch.from_numpy(mask.copy()[np.newaxis]).float()
+
+        return rgb_tensor, depth_tensor, mask_tensor
 
 # ═══════════════════════════════════════════════════════════════════════
 # Real File-Based Dataset
@@ -286,8 +344,11 @@ def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[Train] Device: {device}")
 
-    # ── Dataset ──
-    if args.synthetic:
+    # ── Dataset & DataLoader ──
+    if args.finetune_real:
+        print(f"[Train] Using REAL dataset for finetuning from {args.finetune_real}")
+        dataset = RealFinetuneDataset(img_path=args.finetune_real, length=args.synthetic_size, img_size=args.img_size)
+    elif args.synthetic:
         print("[Train] Using SYNTHETIC dataset for pipeline validation")
         dataset = SyntheticWhealDataset(
             length=args.synthetic_size, img_size=args.img_size
@@ -444,8 +505,10 @@ def main():
                         help="Root directory with rgb/, depth/, mask/ subdirs")
     parser.add_argument("--synthetic", action="store_true",
                         help="Use synthetic procedural data for testing")
+    parser.add_argument("--finetune-real", type=str, default=None,
+                        help="Path to real test photo to explicitly finetune on")
     parser.add_argument("--synthetic-size", type=int, default=2000,
-                        help="Number of synthetic samples to generate")
+                        help="Number of samples to generate")
     parser.add_argument("--img-size", type=int, default=256,
                         help="Training image dimensions (square)")
 
@@ -464,8 +527,8 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.synthetic and args.data_dir is None:
-        parser.error("Must specify --data-dir or use --synthetic")
+    if not args.synthetic and args.data_dir is None and args.finetune_real is None:
+        parser.error("Must specify --data-dir, --synthetic, or --finetune-real")
 
     train(args)
 

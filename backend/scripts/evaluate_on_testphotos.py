@@ -47,13 +47,15 @@ def evaluate():
         
         sam_mask = (manual_mask > 127).astype(np.uint8)
         
-        # Calculate diameters from manual mask
+        # Calculate diameter from the largest manual mask contour
         contours, _ = cv2.findContours(sam_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         ppm = 10.0
-        for cnt in contours:
-            area_px = cv2.contourArea(cnt)
+        if contours:
+            # Get the largest contour by area
+            largest_cnt = max(contours, key=cv2.contourArea)
+            area_px = cv2.contourArea(largest_cnt)
             if area_px > 10:
-                (_, _), radius = cv2.minEnclosingCircle(cnt)
+                (_, _), radius = cv2.minEnclosingCircle(largest_cnt)
                 sam_diameters.append(round((radius * 2) / ppm, 2))
     else:
         try:
