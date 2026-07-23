@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers.v1 import measurements
+from routers.v1 import measurements
 
 app = FastAPI(title="Allergy Wheal Detection API", version="1.0.0")
 

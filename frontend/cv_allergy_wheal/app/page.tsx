@@ -22,6 +22,8 @@ interface AnalysisResponse {
     avg_diameter_mm: number;
     max_diameter_mm: number;
     severity_breakdown: Record<string, number>;
+    image_width: number;
+    image_height: number;
   };
   calibration: {
     detected: boolean;
@@ -36,18 +38,6 @@ interface AnalysisResponse {
   };
 }
 
-/* ─── Default allergen presets ────────────────────────────────────── */
-const DEFAULT_ALLERGENS: Record<string, string> = {
-  A1: "Histamine (Control+)",
-  A2: "Saline (Control-)",
-  B1: "Dust Mite",
-  B2: "Cat Dander",
-  C1: "Dog Dander",
-  C2: "Peanut",
-  D1: "Tree Pollen",
-  D2: "Grass Pollen",
-};
-
 /* ═══════════════════════════════════════════════════════════════════ */
 
 export default function Home() {
@@ -57,12 +47,6 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AnalysisResponse | null>(null);
   const [activeView, setActiveView] = useState<"annotated" | "segmented">("annotated");
-
-  // Allergen grid state
-  const [gridRows, setGridRows] = useState(4);
-  const [gridCols, setGridCols] = useState(2);
-  const [allergens, setAllergens] = useState<Record<string, string>>(DEFAULT_ALLERGENS);
-  const [showGrid, setShowGrid] = useState(false);
 
   /* ─── File handling ──────────────────────────────────────────────── */
   const handleFile = useCallback((file: File) => {
@@ -88,24 +72,6 @@ export default function Home() {
     [handleFile]
   );
 
-  /* ─── Grid management ────────────────────────────────────────────── */
-  const updateGridSize = (rows: number, cols: number) => {
-    setGridRows(rows);
-    setGridCols(cols);
-    const newGrid: Record<string, string> = {};
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const key = `${String.fromCharCode(65 + r)}${c + 1}`;
-        newGrid[key] = allergens[key] || "";
-      }
-    }
-    setAllergens(newGrid);
-  };
-
-  const updateAllergen = (key: string, value: string) => {
-    setAllergens((prev) => ({ ...prev, [key]: value }));
-  };
-
   /* ─── Submit ─────────────────────────────────────────────────────── */
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -122,12 +88,7 @@ export default function Home() {
       const formData = new FormData();
       formData.append("file", image);
 
-      // Build allergen grid JSON (only non-empty entries)
-      const gridEntries = Object.entries(allergens).filter(([, v]) => v.trim());
-      if (gridEntries.length > 0) {
-        const gridObj = Object.fromEntries(gridEntries);
-        formData.append("allergen_grid", JSON.stringify(gridObj));
-      }
+      
 
       const res = await fetch("http://localhost:8000/api/v1/analyze", {
         method: "POST",
@@ -194,7 +155,7 @@ export default function Home() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: data ? "1fr" : "1fr 1fr",
+            gridTemplateColumns: "1fr",
             gap: 24,
             marginBottom: 24,
           }}
@@ -306,158 +267,7 @@ export default function Home() {
             </motion.div>
           )}
 
-          {/* Allergen Grid Card */}
-          {!data && (
-            <motion.div
-              className="glass"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              style={{
-                borderRadius: "var(--radius)",
-                padding: 24,
-                boxShadow: "var(--shadow-card)",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h2 style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--accent)" }}>
-                  🧪 Allergen Grid
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => setShowGrid(!showGrid)}
-                  style={{
-                    background: "none",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-secondary)",
-                    padding: "4px 12px",
-                    borderRadius: "var(--radius-sm)",
-                    fontSize: "0.75rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  {showGrid ? "Hide" : "Configure"}
-                </button>
-              </div>
-
-              {/* Grid size controls */}
-              {showGrid && (
-                <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-                  <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
-                    Rows:
-                    <select
-                      value={gridRows}
-                      onChange={(e) => updateGridSize(Number(e.target.value), gridCols)}
-                      style={{
-                        background: "var(--bg-secondary)",
-                        color: "var(--text-primary)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 4,
-                        padding: "2px 8px",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      {[2, 3, 4, 5, 6, 7, 8].map((n) => (
-                        <option key={n} value={n}>{n}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
-                    Cols:
-                    <select
-                      value={gridCols}
-                      onChange={(e) => updateGridSize(gridRows, Number(e.target.value))}
-                      style={{
-                        background: "var(--bg-secondary)",
-                        color: "var(--text-primary)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 4,
-                        padding: "2px 8px",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      {[2, 3, 4, 5, 6].map((n) => (
-                        <option key={n} value={n}>{n}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              )}
-
-              {/* Grid inputs */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: `40px repeat(${gridCols}, 1fr)`,
-                  gap: 6,
-                  fontSize: "0.78rem",
-                }}
-              >
-                {/* Column headers */}
-                <div />
-                {Array.from({ length: gridCols }, (_, c) => (
-                  <div
-                    key={`header-${c}`}
-                    style={{
-                      textAlign: "center",
-                      fontWeight: 600,
-                      color: "var(--accent)",
-                      paddingBottom: 4,
-                    }}
-                  >
-                    {c + 1}
-                  </div>
-                ))}
-
-                {/* Rows */}
-                {Array.from({ length: gridRows }, (_, r) => {
-                  const rowLabel = String.fromCharCode(65 + r);
-                  return [
-                    <div
-                      key={`row-${r}`}
-                      style={{
-                        fontWeight: 600,
-                        color: "var(--accent)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {rowLabel}
-                    </div>,
-                    ...Array.from({ length: gridCols }, (_, c) => {
-                      const key = `${rowLabel}${c + 1}`;
-                      return (
-                        <input
-                          key={key}
-                          type="text"
-                          placeholder={key}
-                          value={allergens[key] || ""}
-                          onChange={(e) => updateAllergen(key, e.target.value)}
-                          style={{
-                            background: "var(--bg-secondary)",
-                            border: "1px solid var(--border)",
-                            color: "var(--text-primary)",
-                            borderRadius: 4,
-                            padding: "6px 8px",
-                            fontSize: "0.75rem",
-                            outline: "none",
-                            transition: "var(--transition)",
-                          }}
-                          onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
-                          onBlur={(e) => (e.target.style.borderColor = "var(--border)")}
-                        />
-                      );
-                    }),
-                  ];
-                })}
-              </div>
-
-              <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: 10 }}>
-                Map each grid position to the allergen applied at that spot. Leave empty to skip.
-              </p>
-            </motion.div>
-          )}
+          
         </div>
 
         {/* ─── Loading ─────────────────────────────────────────────────── */}
@@ -649,7 +459,40 @@ export default function Home() {
                   ))}
                 </div>
 
-                <div style={{ textAlign: "center" }}>
+                
+                <div style={{ position: "relative", display: "inline-block", textAlign: "center" }}>
+                  <style>{`
+                    .cyst-hover-zone {
+                      position: absolute;
+                      border-radius: 50%;
+                      cursor: crosshair;
+                      transform: translate(-50%, -50%);
+                      z-index: 10;
+                    }
+                    .cyst-tooltip {
+                      position: absolute;
+                      top: 100%;
+                      left: 50%;
+                      transform: translateX(-50%);
+                      margin-top: 8px;
+                      background: var(--bg-card, #1a2235);
+                      border: 1px solid var(--border-accent, #06b6d4);
+                      padding: 8px 12px;
+                      border-radius: var(--radius-sm, 8px);
+                      box-shadow: var(--shadow-card, 0 4px 24px rgba(0,0,0,0.4));
+                      color: var(--text-primary, #f1f5f9);
+                      font-size: 0.8rem;
+                      white-space: nowrap;
+                      opacity: 0;
+                      pointer-events: none;
+                      transition: opacity 0.2s ease;
+                      z-index: 20;
+                      text-align: left;
+                    }
+                    .cyst-hover-zone:hover .cyst-tooltip {
+                      opacity: 1;
+                    }
+                  `}</style>
                   <img
                     src={
                       activeView === "annotated"
@@ -662,9 +505,42 @@ export default function Home() {
                       maxHeight: 600,
                       borderRadius: "var(--radius-sm)",
                       border: "1px solid var(--border)",
+                      display: "block"
                     }}
                   />
+                  
+                  {/* Interactive Cysts Overlay */}
+                  {data.results.map((w) => {
+                    // Coordinates in relation to the original image dimensions
+                    const leftPct = (w.center[0] / data.meta.image_width) * 100;
+                    const topPct = (w.center[1] / data.meta.image_height) * 100;
+                    
+                    // Radius in pixels calculated from diameter_mm and scale_ppm
+                    const radiusPx = (w.diameter_mm / 2) * data.calibration.scale_ppm;
+                    const radiusPct = (radiusPx / data.meta.image_width) * 100; // width relative radius
+
+                    return (
+                      <div
+                        key={w.id}
+                        className="cyst-hover-zone"
+                        style={{
+                          left: `${leftPct}%`,
+                          top: `${topPct}%`,
+                          width: `${radiusPct * 2}%`,
+                          aspectRatio: "1"
+                        }}
+                      >
+                        <div className="cyst-tooltip">
+                          <strong>Cyst #{w.id}</strong><br/>
+                          Diameter: <span style={{color: "var(--accent)"}}>{w.diameter_mm} mm</span><br/>
+                          Area: <span style={{color: "var(--accent)"}}>{w.area_mm2} mm²</span><br/>
+                          Severity: {w.severity.toUpperCase()}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+
                 <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: 8, textAlign: "center" }}>
                   Scale: {data.calibration.scale_ppm.toFixed(2)} px/mm •
                   Method: {data.calibration.method} •
@@ -709,8 +585,7 @@ export default function Home() {
                         }}
                       >
                         <th style={{ padding: "8px 12px", textAlign: "left" }}>ID</th>
-                        <th style={{ padding: "8px 12px", textAlign: "left" }}>Grid</th>
-                        <th style={{ padding: "8px 12px", textAlign: "left" }}>Allergen</th>
+                        
                         <th style={{ padding: "8px 12px", textAlign: "right" }}>Diameter</th>
                         <th style={{ padding: "8px 12px", textAlign: "right" }}>Area</th>
                         <th style={{ padding: "8px 12px", textAlign: "center" }}>Severity</th>
@@ -738,12 +613,7 @@ export default function Home() {
                           <td style={{ padding: "10px 12px", fontWeight: 600, color: "var(--accent)" }}>
                             #{w.id}
                           </td>
-                          <td style={{ padding: "10px 12px", color: "var(--text-secondary)" }}>
-                            {w.grid_position || "—"}
-                          </td>
-                          <td style={{ padding: "10px 12px", fontWeight: 500 }}>
-                            {w.allergen || "—"}
-                          </td>
+                          
                           <td
                             style={{
                               padding: "10px 12px",

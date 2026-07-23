@@ -407,7 +407,7 @@ def train(args):
                 "val_iou": val_iou,
                 "val_dice": val_dice,
             }, str(ckpt_path))
-            print(f"  ✓ Saved best checkpoint (IoU={val_iou:.4f})")
+            print(f"  OK Saved best checkpoint (IoU={val_iou:.4f})")
 
         # Save periodic checkpoint every 25 epochs
         if epoch % 25 == 0:

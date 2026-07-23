@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from typing import Dict, List, Optional
 
-from ..core import utils, config
+from core import utils, config
 from . import preprocessing, calibration, segmentation, allergen_mapping
 
 
@@ -41,7 +41,7 @@ def _draw_annotations(
 
     # ── Draw each wheal ──
     for w in wheals:
-        colour = _SEVERITY_COLOURS.get(w.severity, (200, 200, 200))
+        colour = (0, 0, 255) # red outline
         cx, cy = int(w.center[0]), int(w.center[1])
 
         # Draw contour
@@ -53,23 +53,6 @@ def _draw_annotations(
 
         # Draw centre dot
         cv2.circle(annotated, (cx, cy), 3, colour, -1, cv2.LINE_AA)
-
-        # Measurement label
-        label = f"#{w.id} {w.diameter_mm:.1f}mm"
-        if hasattr(w, "allergen") and w.allergen:
-            label = f"#{w.id} {w.allergen}: {w.diameter_mm:.1f}mm"
-
-        # White text with dark shadow for readability on any background
-        label_pos = (cx + int(radius) + 6, cy + 4)
-        cv2.putText(annotated, label, label_pos,
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 3, cv2.LINE_AA)
-        cv2.putText(annotated, label, label_pos,
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-
-        # Severity badge
-        sev_pos = (cx + int(radius) + 6, cy + 22)
-        cv2.putText(annotated, w.severity.upper(), sev_pos,
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, colour, 1, cv2.LINE_AA)
 
     # ── Scale bar (bottom-right) ──
     bar_mm = 10.0
@@ -127,7 +110,7 @@ def process_image(
 
     # 4. Segment with SAM
     wheals = segmentation.find_wheals(
-        resized, ppm,
+        prep, ppm,
         marker_corners=cal.marker_corners,
     )
 
@@ -175,6 +158,8 @@ def process_image(
             "avg_diameter_mm": round(float(np.mean(diameters)), 2) if diameters else 0.0,
             "max_diameter_mm": round(float(max(diameters)), 2) if diameters else 0.0,
             "severity_breakdown": severity_counts,
+            "image_width": resized.shape[1],
+            "image_height": resized.shape[0],
         },
         "calibration": {
             "detected": cal.detected,

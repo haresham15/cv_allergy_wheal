@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 import imutils
 
-from ..core import config
+from core import config
 
 
 def preprocess(image: np.ndarray) -> dict:
@@ -48,10 +48,26 @@ def preprocess(image: np.ndarray) -> dict:
     )
     clahe = clahe_obj.apply(blurred)
 
+    # ── LAB Color Space Enhancement for SAM ──
+    # Convert BGR to LAB color space
+    lab = cv2.cvtColor(resized, cv2.COLOR_BGR2LAB)
+    l_channel, a_channel, b_channel = cv2.split(lab)
+    
+    # Apply CLAHE to L-channel to aggressively highlight the physical bumps
+    l_clahe = clahe_obj.apply(l_channel)
+    
+    # Merge the CLAHE enhanced L-channel with the original A and B channels
+    lab_enhanced = cv2.merge((l_clahe, a_channel, b_channel))
+    
+    # Convert back from LAB to BGR for the SAM model
+    sam_ready_image = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
+
     return {
         "resized": resized,
         "gray": gray,
         "clahe": clahe,
+        "l_clahe": l_clahe,
         "blurred": blurred,
         "scale": float(scale),
+        "sam_ready_image": sam_ready_image,
     }

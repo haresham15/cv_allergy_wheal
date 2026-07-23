@@ -8,8 +8,8 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 import json
 
-from ...core import config
-from ...services.vision_pipeline import process_image
+from core import config
+from services.vision_pipeline import process_image
 
 router = APIRouter()
 

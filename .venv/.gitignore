@@ -1,15 +1,2 @@
 # Created by venv; see https://docs.python.org/3/library/venv.html
-
-# Ignore the Python virtual environment
-.venv/
-
-# Ignore the entire JDK folder you added
-backend/oracleJdk-25/
-
-# Ignore other common Java and Python files
-*.class
-*.jar
-*.pyc
-__pycache__/
-/build/
-/target/
+*

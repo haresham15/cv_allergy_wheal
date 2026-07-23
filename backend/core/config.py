@@ -18,9 +18,9 @@ CLAHE_TILE_SIZE = (8, 8)
 
 # ─── Wheal Detection ─────────────────────────────────────────────────
 MIN_WHEAL_AREA_MM2 = 2.0         # Ignore blobs smaller than 2 mm²
-MAX_WHEAL_AREA_MM2 = 250.0       # Ignore blobs larger than 250 mm²
-MIN_CIRCULARITY = 0.35           # Wheals should be roughly circular
-MAX_ASPECT_RATIO = 3.0           # Reject very elongated shapes
+MAX_WHEAL_AREA_MM2 = 2000.0      # Ignore blobs larger than 2000 mm²
+MIN_CIRCULARITY = 0.4            # Wheals should be roughly circular
+MAX_ASPECT_RATIO = 2.5           # Reject very elongated shapes
 
 # ─── Severity Thresholds (wheal diameter in mm) ──────────────────────
 SEVERITY_NORMAL_MAX = 3.0        # < 3 mm  → negative / normal
@@ -36,9 +36,10 @@ SAM_CHECKPOINT_PATH = os.path.join(
 )
 
 # SAM Automatic Mask Generator parameters
-SAM_POINTS_PER_SIDE = 32
-SAM_PRED_IOU_THRESH = 0.86
-SAM_STABILITY_SCORE_THRESH = 0.92
+SAM_POINTS_PER_SIDE = 64
+SAM_PRED_IOU_THRESH = 0.85
+SAM_STABILITY_SCORE_THRESH = 0.98
+SAM_BOX_NMS_THRESH = 0.4
 SAM_MIN_MASK_REGION_AREA = 100   # In pixels — pre-filter before mm conversion
 
 # ─── Allergen Grid Defaults ──────────────────────────────────────────

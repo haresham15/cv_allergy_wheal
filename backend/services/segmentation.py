@@ -14,7 +14,7 @@ import torch
 from dataclasses import dataclass
 from typing import List, Optional
 
-from ..core import config
+from core import config
 
 # Lazy-loaded globals — the model is heavy; load once and reuse.
 _sam_model = None
@@ -44,7 +44,8 @@ def _load_sam():
         return _mask_generator
 
     import os
-    from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
+    from segment_anything import sam_model_registry, SamPredictor
+    from skimage.feature import blob_log
 
     checkpoint = config.SAM_CHECKPOINT_PATH
     if not os.path.exists(checkpoint):
@@ -59,15 +60,9 @@ def _load_sam():
     _sam_model = sam_model_registry[config.SAM_MODEL_TYPE](checkpoint=checkpoint)
     _sam_model.to(device=device)
 
-    _mask_generator = SamAutomaticMaskGenerator(
-        model=_sam_model,
-        points_per_side=config.SAM_POINTS_PER_SIDE,
-        pred_iou_thresh=config.SAM_PRED_IOU_THRESH,
-        stability_score_thresh=config.SAM_STABILITY_SCORE_THRESH,
-        min_mask_region_area=config.SAM_MIN_MASK_REGION_AREA,
-    )
+    _mask_generator = SamPredictor(_sam_model)
 
-    print("[SAM] Model loaded ✓")
+    print("[SAM] Model loaded OK")
     return _mask_generator
 
 
@@ -83,6 +78,16 @@ def _classify_severity(diameter_mm: float) -> str:
 def _mask_to_contour(mask: np.ndarray):
     """Extract the largest external contour from a binary mask."""
     mask_u8 = (mask * 255).astype(np.uint8)
+    
+    # ── Morphological Smoothing (Shape Priors) ──
+    # Create an elliptical kernel since wheals are round/elliptical
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    
+    # Closing: fills small holes inside the mask
+    mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, kernel)
+    # Opening: removes small noise attached to the edges, smoothing the boundary
+    mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_OPEN, kernel)
+
     contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return None
@@ -109,7 +114,7 @@ def _is_wheal_shaped(contour: np.ndarray, area_px: float) -> bool:
 
 
 def find_wheals(
-    image: np.ndarray,
+    prep: dict,
     ppm: float,
     marker_corners: Optional[np.ndarray] = None,
 ) -> List[WhealResult]:
@@ -126,13 +131,19 @@ def find_wheals(
         exclude it from results.
     """
 
-    mask_gen = _load_sam()
+    predictor = _load_sam()
 
     # SAM expects RGB
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    sam_masks = mask_gen.generate(image_rgb)
+    image_rgb = cv2.cvtColor(prep["sam_ready_image"], cv2.COLOR_BGR2RGB)
+    predictor.set_image(image_rgb)
 
-    # Area thresholds in pixels (derived from mm² limits)
+    # ── 1. Find Prompt Points via LoG ──
+    # blob_log returns array of [y, x, sigma]
+    # We use the CLAHE enhanced L-channel where cysts are bright blobs.
+    from skimage.feature import blob_log
+    blobs = blob_log(prep["l_clahe"], min_sigma=3, max_sigma=30, num_sigma=10, threshold=0.05)
+
+    # Area thresholds in pixels
     min_area_px = config.MIN_WHEAL_AREA_MM2 * (ppm ** 2)
     max_area_px = config.MAX_WHEAL_AREA_MM2 * (ppm ** 2)
 
@@ -145,11 +156,34 @@ def find_wheals(
     results: List[WhealResult] = []
     wid = 1
 
-    for sam_mask in sam_masks:
-        mask_binary = sam_mask["segmentation"]  # bool ndarray
-        area_px = float(sam_mask["area"])
-        predicted_iou = float(sam_mask["predicted_iou"])
-        stability = float(sam_mask["stability_score"])
+    for blob in blobs:
+        y, x, r = blob
+        cx, cy = float(x), float(y)
+
+        # Exclude regions overlapping the ArUco marker before even prompting SAM
+        if aruco_rect is not None:
+            x1, y1, x2, y2 = aruco_rect
+            if x1 <= cx <= x2 and y1 <= cy <= y2:
+                continue
+
+        # ── 2. Prompt SAM ──
+        input_point = np.array([[cx, cy]])
+        input_label = np.array([1]) # foreground
+
+        masks, scores, logits = predictor.predict(
+            point_coords=input_point,
+            point_labels=input_label,
+            multimask_output=False,
+        )
+
+        mask_binary = masks[0]
+        predicted_iou = float(scores[0])
+
+        # Apply confidence threshold
+        if predicted_iou < config.SAM_PRED_IOU_THRESH:
+            continue
+
+        area_px = float(np.sum(mask_binary))
 
         # ── Size filter ──
         if area_px < min_area_px or area_px > max_area_px:
@@ -164,27 +198,17 @@ def find_wheals(
         if not _is_wheal_shaped(contour, area_px):
             continue
 
-        # ── Compute centroid ──
-        M = cv2.moments(contour)
-        if M["m00"] == 0:
-            continue
-        cx = float(M["m10"] / M["m00"])
-        cy = float(M["m01"] / M["m00"])
-
-        # ── Exclude regions overlapping the ArUco marker ──
-        if aruco_rect is not None:
-            x1, y1, x2, y2 = aruco_rect
-            if x1 <= cx <= x2 and y1 <= cy <= y2:
-                continue
-
         # ── Measure ──
         (_, _), radius = cv2.minEnclosingCircle(contour)
         diameter_px = radius * 2
         diameter_mm = diameter_px / ppm
-        area_mm2 = area_px / (ppm ** 2)
+        
+        # ── Strict Diameter Filtering ──
+        if diameter_mm < 0.5 or diameter_mm > 40.0:
+            continue
 
+        area_mm2 = area_px / (ppm ** 2)
         severity = _classify_severity(diameter_mm)
-        confidence = min(1.0, float(predicted_iou * stability))
 
         results.append(WhealResult(
             id=wid,
@@ -194,16 +218,16 @@ def find_wheals(
             diameter_mm=diameter_mm,
             area_px=area_px,
             area_mm2=area_mm2,
-            confidence=confidence,
+            confidence=predicted_iou,
             severity=severity,
         ))
         wid += 1
 
-    # ── Centroid-based NMS: deduplicate overlapping detections ──
+    # Centroid-based NMS: deduplicate overlapping detections ──
     # SAM often detects both the inner wheal AND the surrounding
     # erythema halo as separate masks at the same location.
     # Keep only the highest-confidence detection per location.
-    min_dist_mm = 3.0  # wheals closer than 3mm apart are considered duplicates
+    min_dist_mm = 8.0  # wheals closer than 8mm apart are considered duplicates
     min_dist_px = min_dist_mm * ppm
     deduped: List[WhealResult] = []
     for candidate in sorted(results, key=lambda w: -w.confidence):
