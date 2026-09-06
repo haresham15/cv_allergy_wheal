@@ -217,7 +217,8 @@ class RealFinetuneDataset(Dataset):
         # Preprocess to get the crop/resize the UNet will see
         from backend.services.preprocessing import preprocess
         prep = preprocess(img)
-        self.base_rgb = cv2.resize(prep["sam_ready_image"], (img_size, img_size))
+        rgb_img = cv2.cvtColor(prep["resized"], cv2.COLOR_BGR2RGB)
+        self.base_rgb = cv2.resize(rgb_img, (img_size, img_size))
         
         H, W = prep["sam_ready_image"].shape[:2]
         self.base_mask = cv2.resize(mask, (W, H), interpolation=cv2.INTER_NEAREST)
@@ -376,6 +377,14 @@ def train(args):
 
     # ── Model ──
     model = LateFusionUNet(n_classes=1, bilinear=False).to(device)
+    
+    ckpt_dir = Path(args.checkpoint_dir)
+    final_path = ckpt_dir / "final_rgbd_unet.pth"
+    if final_path.exists():
+        print(f"[Train] Resuming training from {final_path}")
+        ckpt = torch.load(str(final_path), map_location=device, weights_only=False)
+        model.load_state_dict(ckpt["model_state_dict"])
+        
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"[Train] Model parameters: {param_count:,}")
 

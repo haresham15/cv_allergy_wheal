@@ -17,10 +17,10 @@ CLAHE_CLIP_LIMIT = 3.0
 CLAHE_TILE_SIZE = (8, 8)
 
 # ─── Wheal Detection ─────────────────────────────────────────────────
-MIN_WHEAL_AREA_MM2 = 2.0         # Ignore blobs smaller than 2 mm²
-MAX_WHEAL_AREA_MM2 = 2000.0      # Ignore blobs larger than 2000 mm²
-MIN_CIRCULARITY = 0.4            # Wheals should be roughly circular
-MAX_ASPECT_RATIO = 2.5           # Reject very elongated shapes
+MIN_WHEAL_AREA_MM2 = 0.5         # Ignore blobs smaller than 0.5 mm² (small punctate reactions)
+MAX_WHEAL_AREA_MM2 = 2500.0      # Ignore blobs larger than 2500 mm²
+MIN_CIRCULARITY = 0.30           # Wheals can have irregular contours / pseudopods
+MAX_ASPECT_RATIO = 3.0           # Reject very elongated linear scratches
 
 # ─── Severity Thresholds (wheal diameter in mm) ──────────────────────
 SEVERITY_NORMAL_MAX = 3.0        # < 3 mm  → negative / normal
@@ -35,13 +35,17 @@ SAM_CHECKPOINT_PATH = os.path.join(
     "sam_vit_b_01ec64.pth",
 )
 
-# SAM Automatic Mask Generator parameters
+# SAM Inference parameters
 SAM_POINTS_PER_SIDE = 64
-SAM_PRED_IOU_THRESH = 0.85
-SAM_STABILITY_SCORE_THRESH = 0.98
+SAM_PRED_IOU_THRESH = 0.60       # Calibrated for skin prick test subpart masks
+SAM_STABILITY_SCORE_THRESH = 0.95
 SAM_BOX_NMS_THRESH = 0.4
-SAM_MIN_MASK_REGION_AREA = 100   # In pixels — pre-filter before mm conversion
+SAM_MIN_MASK_REGION_AREA = 20    # Minimum mask area in pixels
 
 # ─── Allergen Grid Defaults ──────────────────────────────────────────
 DEFAULT_GRID_ROWS = 4
 DEFAULT_GRID_COLS = 2
+
+# ─── Server & Environment Configuration ──────────────────────────────
+PORT = int(os.environ.get("PORT", 8000))
+CORS_ORIGINS = [orig.strip() for orig in os.environ.get("CORS_ORIGINS", "*").split(",") if orig.strip()]

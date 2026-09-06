@@ -90,7 +90,12 @@ export default function Home() {
 
       
 
-      const res = await fetch("http://localhost:8000/api/v1/analyze", {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL;
+      const endpoint = apiBase
+        ? `${apiBase.replace(/\/$/, "")}/api/v1/analyze`
+        : "/api/analyze";
+
+      const res = await fetch(endpoint, {
         method: "POST",
         body: formData,
       });
