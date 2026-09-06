@@ -23,6 +23,8 @@ class CalibrationResult:
     method: str                                    # "aruco" | "estimated"
     marker_corners: Optional[np.ndarray] = None    # 4 corner points (if detected)
     marker_id: Optional[int] = None
+    body_region: Optional[str] = None              # "forearm" | "back" | "torso"
+    warning: Optional[str] = None
 
 
 def detect_aruco_marker(image: np.ndarray) -> Optional[CalibrationResult]:
@@ -69,21 +71,70 @@ def detect_aruco_marker(image: np.ndarray) -> Optional[CalibrationResult]:
         method="aruco",
         marker_corners=marker_corners,
         marker_id=marker_id,
+        body_region="calibrated",
+        warning=None,
     )
 
 
-def _estimate_ppm(image: np.ndarray) -> CalibrationResult:
-    """Rough fallback: assume the image captures ~70mm of skin width."""
+def _estimate_ppm(
+    image: np.ndarray,
+    skin_mask: Optional[np.ndarray] = None,
+    body_location: Optional[str] = None,
+) -> CalibrationResult:
+    """Anatomical fallback when no physical calibration marker is present.
+    
+    Adjusts assumed physical skin width based on whether the test is on a forearm
+    (~75mm) or a broad back/torso (~320mm).
+    """
     h, w = image.shape[:2]
-    assumed_skin_width_mm = 70.0
-    fraction = 0.7
+
+    # Resolve body location
+    if body_location in ("back", "torso"):
+        assumed_skin_width_mm = 320.0
+        region = "back"
+    elif body_location in ("forearm", "arm"):
+        assumed_skin_width_mm = 75.0
+        region = "forearm"
+    else:
+        # Automatic anatomical heuristic: check skin span and aspect ratio
+        region = "forearm"
+        assumed_skin_width_mm = 75.0
+        if skin_mask is not None and (skin_mask > 0).any():
+            contours, _ = cv2.findContours((skin_mask > 0).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                largest_c = max(contours, key=cv2.contourArea)
+                x, y, sw, sh = cv2.boundingRect(largest_c)
+                area_frac = cv2.contourArea(largest_c) / (h * w)
+                # Full back/torso images exhibit a wide skin expanse spanning most of the frame
+                if sw > 0.70 * w and area_frac > 0.45 and (sw / max(1, sh)) > 0.85:
+                    assumed_skin_width_mm = 320.0
+                    region = "back"
+
+    # Assume the skin test field spans ~75% of the frame width
+    fraction = 0.75
     ppm = (w * fraction) / assumed_skin_width_mm
-    return CalibrationResult(detected=False, ppm=float(ppm), method="estimated")
+
+    warning_msg = (
+        f"No ArUco marker detected. Scale is estimated using {region} anatomical heuristic (~{assumed_skin_width_mm:.0f}mm). "
+        "For clinical diagnostic accuracy, place a printed 20mm ArUco marker beside the test site."
+    )
+
+    return CalibrationResult(
+        detected=False,
+        ppm=float(ppm),
+        method="estimated",
+        body_region=region,
+        warning=warning_msg,
+    )
 
 
-def get_calibration(image: np.ndarray) -> CalibrationResult:
-    """Main entry point — try ArUco detection; fall back to estimation."""
+def get_calibration(
+    image: np.ndarray,
+    skin_mask: Optional[np.ndarray] = None,
+    body_location: Optional[str] = None,
+) -> CalibrationResult:
+    """Main entry point — try ArUco detection; fall back to anatomical estimation."""
     result = detect_aruco_marker(image)
     if result is not None:
         return result
-    return _estimate_ppm(image)
+    return _estimate_ppm(image, skin_mask=skin_mask, body_location=body_location)

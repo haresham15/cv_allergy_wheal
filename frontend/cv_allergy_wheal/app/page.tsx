@@ -30,6 +30,8 @@ interface AnalysisResponse {
     method: string;
     scale_ppm: number;
     marker_id: number | null;
+    body_region?: string | null;
+    warning?: string | null;
   };
   results: WhealResult[];
   visualization: {
@@ -47,6 +49,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AnalysisResponse | null>(null);
   const [activeView, setActiveView] = useState<"annotated" | "segmented">("annotated");
+  const [bodyLocation, setBodyLocation] = useState<string>("auto");
 
   const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
   const SUPPORTED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif", ".heic", ".heif"];
@@ -107,8 +110,9 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append("file", image);
-
-      
+      if (bodyLocation && bodyLocation !== "auto") {
+        formData.append("body_location", bodyLocation);
+      }
 
       const apiBase = process.env.NEXT_PUBLIC_API_URL;
       const endpoint = apiBase
@@ -310,6 +314,48 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* ─── Test Site Location Selector ─── */}
+                <div style={{ marginBottom: 16 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.82rem",
+                      fontWeight: 500,
+                      color: "var(--text-secondary)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    Test Site Anatomical Location:
+                  </label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[
+                      { id: "auto", label: "Auto-detect" },
+                      { id: "forearm", label: "Forearm (~75mm)" },
+                      { id: "back", label: "Back / Torso (~320mm)" },
+                    ].map((loc) => (
+                      <button
+                        key={loc.id}
+                        type="button"
+                        onClick={() => setBodyLocation(loc.id)}
+                        style={{
+                          flex: 1,
+                          padding: "6px 8px",
+                          borderRadius: "var(--radius-sm)",
+                          border: bodyLocation === loc.id ? "1px solid #06b6d4" : "1px solid var(--border)",
+                          background: bodyLocation === loc.id ? "rgba(6, 182, 212, 0.15)" : "rgba(255, 255, 255, 0.03)",
+                          color: bodyLocation === loc.id ? "#06b6d4" : "var(--text-secondary)",
+                          fontSize: "0.78rem",
+                          fontWeight: bodyLocation === loc.id ? 600 : 400,
+                          cursor: "pointer",
+                          transition: "var(--transition)",
+                        }}
+                      >
+                        {loc.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -416,6 +462,73 @@ export default function Home() {
               >
                 ← New Analysis
               </button>
+
+              {/* ─── Calibration Status Alert ─────────────────────────── */}
+              {data.calibration && (
+                <div
+                  style={{
+                    background: data.calibration.detected
+                      ? "rgba(16, 185, 129, 0.08)"
+                      : "rgba(245, 158, 11, 0.08)",
+                    border: `1px solid ${
+                      data.calibration.detected
+                        ? "rgba(16, 185, 129, 0.25)"
+                        : "rgba(245, 158, 11, 0.3)"
+                    }`,
+                    borderRadius: "var(--radius-sm)",
+                    padding: "12px 18px",
+                    marginBottom: 20,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 16,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: "1.2rem" }}>
+                      {data.calibration.detected ? "✅" : "⚠️"}
+                    </span>
+                    <div>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          fontSize: "0.9rem",
+                          color: data.calibration.detected ? "#10b981" : "#f59e0b",
+                        }}
+                      >
+                        {data.calibration.detected
+                          ? `Calibrated via Physical ArUco Marker (ID: ${data.calibration.marker_id ?? 0})`
+                          : `Estimated Scale (${data.calibration.body_region || "anatomical"} model)`}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          color: "var(--text-secondary)",
+                          marginTop: 2,
+                        }}
+                      >
+                        {data.calibration.warning ||
+                          `Physical scale: ${data.calibration.scale_ppm.toFixed(2)} px/mm.`}
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "0.78rem",
+                      padding: "4px 10px",
+                      borderRadius: "20px",
+                      background: data.calibration.detected
+                        ? "rgba(16, 185, 129, 0.15)"
+                        : "rgba(245, 158, 11, 0.15)",
+                      color: data.calibration.detected ? "#10b981" : "#f59e0b",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {data.calibration.scale_ppm.toFixed(2)} px/mm
+                  </div>
+                </div>
+              )}
 
               {/* ─── Stats Row ──────────────────────────────────────────── */}
               <div

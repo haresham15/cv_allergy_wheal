@@ -97,6 +97,7 @@ except ImportError:
 def process_image(
     file_bytes: bytes,
     allergen_grid: Optional[Dict[str, str]] = None,
+    body_location: Optional[str] = None,
 ) -> dict:
     """Orchestrate the full processing pipeline.
 
@@ -106,6 +107,8 @@ def process_image(
         Raw uploaded image bytes (JPEG/PNG).
     allergen_grid : dict, optional
         Allergen mapping, e.g. {"A1": "Peanut", "A2": "Dust Mite"}.
+    body_location : str, optional
+        Anatomical region ("forearm" or "back") to refine calibration when no marker is present.
 
     Returns
     -------
@@ -115,18 +118,20 @@ def process_image(
     # 1. Decode
     img = utils.bytes_to_cv2_image(file_bytes)
 
-    # 2. Preprocess
+    # 2. Preprocess (generates resized, CLAHE, and patient skin ROI mask)
     prep = preprocessing.preprocess(img)
     resized = prep["resized"]
+    skin_mask = prep.get("skin_mask")
 
-    # 3. Calibrate (ArUco detection on the resized image)
-    cal = calibration.get_calibration(resized)
+    # 3. Calibrate (ArUco detection or anatomical body-region fallback)
+    cal = calibration.get_calibration(resized, skin_mask=skin_mask, body_location=body_location)
     ppm = cal.ppm
 
-    # 4. Segment with SAM
+    # 4. Segment with SAM (skin ROI filtered, contrast ranked, calibrated area bounds)
     wheals = segmentation.find_wheals(
         prep, ppm,
         marker_corners=cal.marker_corners,
+        cal_detected=cal.detected,
     )
 
     # 5. Map allergens (if grid supplied)
@@ -181,6 +186,8 @@ def process_image(
             "method": cal.method,
             "scale_ppm": round(cal.ppm, 4),
             "marker_id": cal.marker_id,
+            "body_region": cal.body_region,
+            "warning": cal.warning,
         },
         "results": results,
         "visualization": {

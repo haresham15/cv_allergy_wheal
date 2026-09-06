@@ -149,7 +149,11 @@ def evaluate():
     # ═══════════════════════════════════════════════════════════════════
     print("\n--- Evaluating Production SAM Segmentation Pipeline ---")
     t0 = time.time()
-    sam_detections = find_wheals(prep, ppm=ppm)
+    sam_detections = find_wheals(
+        prep, ppm=ppm,
+        marker_corners=cal.marker_corners,
+        cal_detected=cal.detected,
+    )
     sam_time = time.time() - t0
     print(f"SAM execution time: {sam_time:.2f}s | Detections found: {len(sam_detections)}")
 

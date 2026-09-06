@@ -18,6 +18,7 @@ router = APIRouter()
 async def analyze_skin_test(
     file: UploadFile = File(...),
     allergen_grid: Optional[str] = Form(None),
+    body_location: Optional[str] = Form(None),
 ):
     """Analyse an allergy skin-prick test image.
 
@@ -28,6 +29,8 @@ async def analyze_skin_test(
     allergen_grid : str (JSON), optional
         JSON-encoded dict mapping grid positions to allergen names.
         Example: '{"A1": "Peanut", "A2": "Dust Mite", "B1": "Cat Dander"}'
+    body_location : str, optional
+        Anatomical location ("forearm" or "back") to refine calibration when no marker is present.
     """
 
     # ── Validate file ──
@@ -68,7 +71,7 @@ async def analyze_skin_test(
 
     # ── Process ──
     try:
-        results = process_image(contents, allergen_grid=grid_dict)
+        results = process_image(contents, allergen_grid=grid_dict, body_location=body_location)
         return JSONResponse(content=results)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
