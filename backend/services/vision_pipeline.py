@@ -79,6 +79,21 @@ def _build_composite_mask(image: np.ndarray, wheals: list) -> np.ndarray:
     return mask
 
 
+try:
+    import spaces
+except ImportError:
+    class _SpacesMock:
+        @staticmethod
+        def GPU(func=None, duration=None):
+            if func is not None:
+                return func
+            def decorator(f):
+                return f
+            return decorator
+    spaces = _SpacesMock()
+
+
+@spaces.GPU(duration=120)
 def process_image(
     file_bytes: bytes,
     allergen_grid: Optional[Dict[str, str]] = None,

@@ -54,14 +54,22 @@ import uvicorn
 from main import app as fastapi_app
 from services.vision_pipeline import process_image
 
-# Detect Hugging Face ZeroGPU if available
+# Hugging Face ZeroGPU support
 try:
     import spaces
-    HAS_SPACES = True
 except ImportError:
-    HAS_SPACES = False
+    class _SpacesMock:
+        @staticmethod
+        def GPU(func=None, duration=None):
+            if func is not None:
+                return func
+            def decorator(f):
+                return f
+            return decorator
+    spaces = _SpacesMock()
 
 
+@spaces.GPU(duration=120)
 def run_analysis(input_image):
     """Gradio handler: accepts numpy image, processes via vision_pipeline, returns visuals and JSON."""
     if input_image is None:
@@ -106,9 +114,6 @@ def run_analysis(input_image):
     return annotated_img, segmented_img, metrics_summary
 
 
-# Wrap with ZeroGPU decorator if running on Hugging Face Spaces with ZeroGPU
-if HAS_SPACES:
-    run_analysis = spaces.GPU(run_analysis)
 
 # ── Build Gradio Interactive Web Interface ──
 with gr.Blocks(title="WhealVision API & Web Demo") as demo:
