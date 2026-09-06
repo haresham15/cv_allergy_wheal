@@ -89,6 +89,7 @@ with gr.Blocks(title="WhealVision API & Web Demo") as demo:
         """
         # 🔬 WhealVision - Allergy Wheal Detection Backend
         AI-powered segmentation and measurement of skin-prick allergy wheals using **Meta's Segment Anything Model (SAM)**.
+        Supports high-resolution images up to **50 MB** (JPEG, PNG, WebP, BMP, TIFF, HEIC).
         
         ### 🌐 API Access for Next.js & Clients:
         - **REST API Endpoint:** `POST /api/v1/analyze` (Multipart form with `file`)

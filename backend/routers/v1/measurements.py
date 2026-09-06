@@ -31,12 +31,26 @@ async def analyze_skin_test(
     """
 
     # ── Validate file ──
-    if file.content_type not in config.ALLOWED_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail="Invalid file type. Submit JPEG or PNG.")
+    is_valid_type = (
+        file.content_type in config.ALLOWED_CONTENT_TYPES
+        or (file.content_type and file.content_type.startswith("image/"))
+        or (
+            file.filename
+            and file.filename.lower().endswith(
+                (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif", ".heic", ".heif")
+            )
+        )
+    )
+    if not is_valid_type:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Supported formats: JPEG, PNG, WebP, BMP, TIFF, HEIC.",
+        )
 
     contents = await file.read()
     if len(contents) > config.MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=413, detail="File too large (max 10 MB).")
+        max_mb = config.MAX_UPLOAD_SIZE // (1024 * 1024)
+        raise HTTPException(status_code=413, detail=f"File too large (max {max_mb} MB).")
 
     # ── Parse allergen grid ──
     grid_dict = None

@@ -48,8 +48,28 @@ export default function Home() {
   const [data, setData] = useState<AnalysisResponse | null>(null);
   const [activeView, setActiveView] = useState<"annotated" | "segmented">("annotated");
 
+  const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+  const SUPPORTED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif", ".heic", ".heif"];
+
   /* ─── File handling ──────────────────────────────────────────────── */
   const handleFile = useCallback((file: File) => {
+    // Validate file size (max 50 MB)
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setError(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed size is 50 MB.`);
+      return;
+    }
+
+    // Validate file format
+    const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+    const isValidFormat =
+      file.type.startsWith("image/") ||
+      SUPPORTED_EXTENSIONS.includes(ext);
+
+    if (!isValidFormat) {
+      setError("Unsupported file format. Please upload JPEG, PNG, WebP, HEIC, TIFF, or BMP.");
+      return;
+    }
+
     setImage(file);
     setError(null);
     setData(null);
@@ -204,45 +224,90 @@ export default function Home() {
                   <input
                     type="file"
                     id="file-input"
-                    accept="image/jpeg,image/png"
+                    accept="image/*,.jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.heic,.heif"
                     onChange={handleFileInput}
                     style={{ display: "none" }}
                   />
                   {preview ? (
-                    <img
-                      src={preview}
-                      alt="Preview"
-                      style={{
-                        maxHeight: 220,
-                        maxWidth: "100%",
-                        objectFit: "contain",
-                        borderRadius: "var(--radius-sm)",
-                      }}
-                    />
+                    <div>
+                      <img
+                        src={preview}
+                        alt="Preview"
+                        style={{
+                          maxHeight: 240,
+                          maxWidth: "100%",
+                          objectFit: "contain",
+                          borderRadius: "var(--radius-sm)",
+                        }}
+                      />
+                      <p style={{ fontSize: "0.8rem", color: "var(--accent)", marginTop: 8 }}>
+                        Click or drop a different image to replace
+                      </p>
+                    </div>
                   ) : (
                     <>
-                      <div style={{ fontSize: "2.5rem", marginBottom: 8 }}>📤</div>
-                      <p style={{ fontWeight: 500, color: "var(--text-primary)" }}>
+                      <div style={{ fontSize: "2.8rem", marginBottom: 8 }}>🖼️</div>
+                      <p style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "1rem" }}>
                         Drop image here or click to browse
                       </p>
-                      <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 4 }}>
-                        JPEG or PNG • Max 10 MB • Include ArUco marker in the photo
+                      <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 6, lineHeight: 1.5 }}>
+                        Supports <strong>JPEG, PNG, WebP, HEIC, TIFF, BMP</strong> up to <strong>50 MB</strong>
+                        <br />
+                        Include an ArUco marker in the photo for millimeter calibration
                       </p>
                     </>
                   )}
                 </div>
 
                 {image && (
-                  <p
+                  <div
                     style={{
-                      fontSize: "0.8rem",
-                      color: "var(--text-secondary)",
-                      marginBottom: 12,
-                      textAlign: "center",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: "rgba(255, 255, 255, 0.04)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--radius-sm)",
+                      padding: "8px 14px",
+                      fontSize: "0.85rem",
+                      marginBottom: 16,
                     }}
                   >
-                    {image.name} — {(image.size / 1024).toFixed(0)} KB
-                  </p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+                      <span>📄</span>
+                      <span
+                        style={{
+                          fontWeight: 500,
+                          color: "var(--text-primary)",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          maxWidth: 240,
+                        }}
+                      >
+                        {image.name}
+                      </span>
+                      <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>
+                        ({image.size > 1024 * 1024
+                          ? `${(image.size / (1024 * 1024)).toFixed(1)} MB`
+                          : `${(image.size / 1024).toFixed(0)} KB`})
+                      </span>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "0.7rem",
+                        textTransform: "uppercase",
+                        background: "rgba(6, 182, 212, 0.15)",
+                        color: "var(--accent)",
+                        padding: "3px 8px",
+                        borderRadius: 4,
+                        fontWeight: 600,
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      {image.type ? image.type.replace("image/", "") : image.name.split(".").pop()}
+                    </span>
+                  </div>
                 )}
 
                 <motion.button

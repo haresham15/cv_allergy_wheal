@@ -3,8 +3,19 @@
 import os, cv2
 
 # ─── Upload Constraints ──────────────────────────────────────────────
-ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png"]
-MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB (SAM needs decent resolution)
+ALLOWED_CONTENT_TYPES = [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/bmp",
+    "image/tiff",
+    "image/heic",
+    "image/heif",
+    "image/x-ms-bmp",
+    "application/octet-stream",
+]
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB max image upload
 
 # ─── ArUco Calibration ───────────────────────────────────────────────
 ARUCO_DICT_TYPE = cv2.aruco.DICT_4X4_50

@@ -7,12 +7,28 @@ import cv2
 def bytes_to_cv2_image(file_bytes: bytes):
     """Decode raw bytes into an OpenCV BGR image (numpy array).
 
+    Supports JPEG, PNG, WebP, BMP, TIFF, HEIC, etc.
+    Automatically handles smartphone EXIF orientation.
     Raises ValueError if decoding fails.
     """
     nparr = np.frombuffer(file_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    # If OpenCV decoding returns None or for EXIF orientation correction
+    try:
+        import io
+        from PIL import Image, ImageOps
+        pil_img = Image.open(io.BytesIO(file_bytes))
+        pil_img = ImageOps.exif_transpose(pil_img)
+        pil_img = pil_img.convert("RGB")
+        rgb_arr = np.array(pil_img)
+        img = cv2.cvtColor(rgb_arr, cv2.COLOR_RGB2BGR)
+    except Exception:
+        # Fall back to the OpenCV decode result if PIL fails
+        pass
+
     if img is None:
-        raise ValueError("Could not decode image bytes")
+        raise ValueError("Could not decode image bytes into a valid image")
     return img
 
 

@@ -29,7 +29,10 @@ def preprocess(image: np.ndarray) -> dict:
 
     # Resize if larger than limit (keep aspect ratio)
     if longest > config.MAX_IMAGE_DIMENSION:
-        resized = imutils.resize(image, width=config.MAX_IMAGE_DIMENSION)
+        if h > w:
+            resized = imutils.resize(image, height=config.MAX_IMAGE_DIMENSION)
+        else:
+            resized = imutils.resize(image, width=config.MAX_IMAGE_DIMENSION)
     else:
         resized = image.copy()
 
