@@ -22,6 +22,33 @@ try:
 except Exception as e:
     print(f"[Warning] Model auto-download check: {e}")
 
+# Compatibility shim for huggingface_hub v1.0+ removing HfFolder
+try:
+    import huggingface_hub
+    if not hasattr(huggingface_hub, "HfFolder"):
+        class _HfFolderShim:
+            @staticmethod
+            def get_token():
+                try:
+                    return huggingface_hub.get_token()
+                except Exception:
+                    return None
+            @staticmethod
+            def save_token(token):
+                try:
+                    huggingface_hub.login(token=token)
+                except Exception:
+                    pass
+            @staticmethod
+            def delete_token():
+                try:
+                    huggingface_hub.logout()
+                except Exception:
+                    pass
+        huggingface_hub.HfFolder = _HfFolderShim
+except Exception:
+    pass
+
 import gradio as gr
 import uvicorn
 from main import app as fastapi_app

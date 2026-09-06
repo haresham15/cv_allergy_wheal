@@ -49,6 +49,14 @@ def _load_sam():
 
     checkpoint = config.SAM_CHECKPOINT_PATH
     if not os.path.exists(checkpoint):
+        print(f"[SAM] Checkpoint not found at {checkpoint}. Attempting auto-download...")
+        try:
+            from scripts.download_sam import main as download_sam_main
+            download_sam_main()
+        except Exception as e:
+            print(f"[SAM] Auto-download failed: {e}")
+
+    if not os.path.exists(checkpoint):
         raise FileNotFoundError(
             f"SAM checkpoint not found at {checkpoint}. "
             f"Run: python -m backend.scripts.download_sam"
