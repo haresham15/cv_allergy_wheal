@@ -1,5 +1,5 @@
-# WhealVision Hugging Face Space Automated Deployment Script
-# Deploys backend/ to https://huggingface.co/spaces/hareshm15/allergy_wheal_api
+# WhealVision Hugging Face Space Deployment Script
+# Deploys backend to https://huggingface.co/spaces/hareshm15/allergy_wheal_api
 
 param(
     [string]$Token = $env:HF_TOKEN
@@ -7,9 +7,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "`n========================================================" -ForegroundColor Cyan
-Write-Host " 🚀 WhealVision - Deploy to Hugging Face Gradio Space" -ForegroundColor Cyan
-Write-Host "========================================================`n" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "========================================================" -ForegroundColor Cyan
+Write-Host " [Deploy] WhealVision to Hugging Face Gradio Space" -ForegroundColor Cyan
+Write-Host "========================================================" -ForegroundColor Cyan
+Write-Host ""
 
 $RepoUrl = "https://huggingface.co/spaces/hareshm15/allergy_wheal_api"
 $DeployDir = Join-Path $PSScriptRoot ".hf_space"
@@ -17,9 +19,10 @@ $BackendDir = Join-Path $PSScriptRoot "backend"
 
 # 1. Get Access Token
 if (-not $Token) {
-    Write-Host "Please provide your Hugging Face Access Token (with WRITE permissions)." -ForegroundColor Yellow
-    Write-Host "Generate one here if you haven't: https://huggingface.co/settings/tokens`n" -ForegroundColor Yellow
-    $Token = Read-Host -Prompt "Enter Hugging Face Token (hf_...)"
+    Write-Host "Please enter your Hugging Face Access Token (with WRITE permissions)." -ForegroundColor Yellow
+    Write-Host "You can create or copy one here: https://huggingface.co/settings/tokens" -ForegroundColor Yellow
+    Write-Host ""
+    $Token = Read-Host -Prompt "Enter Hugging Face Token (starts with hf_)"
 }
 
 if (-not $Token -or -not $Token.Trim()) {
@@ -38,10 +41,9 @@ if (Test-Path $DeployDir) {
 
 # 3. Clone the Space Repository
 Write-Host "[2/5] Cloning Hugging Face Space repository..." -ForegroundColor Green
-try {
-    git clone $AuthRepoUrl $DeployDir
-} catch {
-    Write-Error "Failed to clone Space. Please check your token permissions and make sure the space exists."
+git clone $AuthRepoUrl $DeployDir
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Failed to clone Space. Please check that your token has WRITE permissions." -ForegroundColor Red
     exit 1
 }
 
@@ -75,7 +77,7 @@ Copy-Item -Path (Join-Path $BackendDir "services\*") -Destination (Join-Path $De
 Copy-Item (Join-Path $BackendDir "scripts\download_sam.py") -Destination (Join-Path $DeployDir "scripts") -Force
 Copy-Item (Join-Path $BackendDir "scripts\__init__.py") -Destination (Join-Path $DeployDir "scripts") -Force
 
-# Copy models code (exclude .pth weights to keep repository light)
+# Copy models code (exclude heavy .pth weights)
 Copy-Item (Join-Path $BackendDir "models\unet_rgbd.py") -Destination (Join-Path $DeployDir "models") -Force
 Copy-Item (Join-Path $BackendDir "models\__init__.py") -Destination (Join-Path $DeployDir "models") -Force
 
@@ -89,9 +91,13 @@ try {
     git add .
     $status = git status --porcelain
     if ($status) {
-        git commit -m "Deploy WhealVision Gradio + FastAPI backend with SAM and ZeroGPU support"
+        git commit -m "Deploy WhealVision Gradio and FastAPI backend with SAM and ZeroGPU support"
         git push origin main
-        Write-Host "✓ Successfully pushed to Hugging Face!" -ForegroundColor Green
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Git push failed. Please verify your token has WRITE permissions." -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "Successfully pushed to Hugging Face!" -ForegroundColor Green
     } else {
         Write-Host "Everything is already up-to-date in the Space!" -ForegroundColor Yellow
     }
@@ -102,15 +108,18 @@ try {
 }
 
 # 6. Completion Summary
-Write-Host "`n========================================================" -ForegroundColor Cyan
-Write-Host " 🎉 Deployment Complete!" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "========================================================" -ForegroundColor Cyan
+Write-Host " Deployment Complete!" -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "Your Space is now building and will be live at:"
-Write-Host "  • Web Demo & Logs:  https://huggingface.co/spaces/hareshm15/allergy_wheal_api" -ForegroundColor Yellow
-Write-Host "  • Direct REST API:   https://hareshm15-allergy-wheal-api.hf.space" -ForegroundColor Yellow
-Write-Host "  • Health Endpoint:   https://hareshm15-allergy-wheal-api.hf.space/health" -ForegroundColor Yellow
-Write-Host "  • Interactive Docs:  https://hareshm15-allergy-wheal-api.hf.space/docs`n" -ForegroundColor Yellow
+Write-Host "  - Web Demo:         https://huggingface.co/spaces/hareshm15/allergy_wheal_api" -ForegroundColor Yellow
+Write-Host "  - Direct REST API:  https://hareshm15-allergy-wheal-api.hf.space" -ForegroundColor Yellow
+Write-Host "  - Health Check:     https://hareshm15-allergy-wheal-api.hf.space/health" -ForegroundColor Yellow
+Write-Host "  - API Swagger Docs: https://hareshm15-allergy-wheal-api.hf.space/docs" -ForegroundColor Yellow
+Write-Host ""
 Write-Host "Next Step:" -ForegroundColor Cyan
-Write-Host "In your Vercel project settings, set:"
-Write-Host "  NEXT_PUBLIC_API_URL = https://hareshm15-allergy-wheal-api.hf.space" -ForegroundColor White
-Write-Host "========================================================`n" -ForegroundColor Cyan
+Write-Host "Once the space build is Complete (shows Running), test your live web app:"
+Write-Host "  https://cv-allergy-wheal.vercel.app/" -ForegroundColor White
+Write-Host "========================================================" -ForegroundColor Cyan
+Write-Host ""
