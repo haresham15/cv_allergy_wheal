@@ -25,6 +25,7 @@ def dummy_gpu_func():
     pass
 
 import os
+os.environ["GRADIO_SSR_MODE"] = "false"
 import sys
 import io
 import base64
@@ -93,6 +94,7 @@ custom_app.add_middleware(
 
 # Register REST API endpoints
 custom_app.include_router(measurements.router, prefix="/api/v1")
+custom_app.include_router(measurements.router, prefix="/v1")
 custom_app.get("/health")(health_check)
 
 
@@ -171,6 +173,7 @@ with gr.Blocks(title="WhealVision API & Web Demo") as demo:
         fn=run_analysis,
         inputs=[input_img],
         outputs=[out_annotated, out_segmented, out_json],
+        api_name="analyze",
     )
 
 
@@ -183,10 +186,11 @@ if __name__ == "__main__":
             server_name="0.0.0.0",
             server_port=port,
             _app=custom_app,
+            ssr_mode=False,
             prevent_thread_lock=False,
         )
     except TypeError:
-        # Fallback if launch() doesn't accept _app
+        # Fallback if launch() doesn't accept _app or ssr_mode
         demo.launch(
             server_name="0.0.0.0",
             server_port=port,
