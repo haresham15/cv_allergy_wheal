@@ -37,10 +37,10 @@ def main():
 
     if os.path.exists(MODEL_PATH):
         size_mb = os.path.getsize(MODEL_PATH) / (1024 * 1024)
-        print(f"✅  SAM model already exists at: {MODEL_PATH} ({size_mb:.1f} MB)")
+        print(f"[OK] SAM model already exists at: {MODEL_PATH} ({size_mb:.1f} MB)")
         return
 
-    print(f"📥  Downloading SAM ViT-B model...")
+    print(f"[Download] Downloading SAM ViT-B model...")
     print(f"    URL:  {MODEL_URL}")
     print(f"    Dest: {MODEL_PATH}")
     print()
@@ -48,9 +48,9 @@ def main():
     try:
         download_with_progress(MODEL_URL, MODEL_PATH)
         size_mb = os.path.getsize(MODEL_PATH) / (1024 * 1024)
-        print(f"✅  Download complete! ({size_mb:.1f} MB)")
+        print(f"[OK] Download complete! ({size_mb:.1f} MB)")
     except Exception as e:
-        print(f"❌  Download failed: {e}")
+        print(f"[Error] Download failed: {e}")
         if os.path.exists(MODEL_PATH):
             os.remove(MODEL_PATH)
         sys.exit(1)

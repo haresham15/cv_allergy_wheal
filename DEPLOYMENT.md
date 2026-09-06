@@ -30,45 +30,56 @@ To run the complete production stack (Backend + Frontend) locally or on a VPS:
 
 ---
 
-## 2. Backend Deployment (Hugging Face Spaces - Free 16GB RAM Tier)
+## 2. Backend Deployment (Hugging Face Spaces - Free Tier)
 
-Hugging Face Spaces provides **16 GB RAM and 2 vCPUs** on its free tier, making it ideal for hosting the SAM ViT-B model without out-of-memory errors.
+Hugging Face Spaces offers **Free Gradio Spaces** with **ZeroGPU (Nvidia A100)** or **CPU Basic (16 GB RAM)**. Custom Docker Spaces require a paid subscription, but the **Gradio SDK** is completely free and natively runs our FastAPI application alongside an interactive UI!
 
-### Steps:
-1. Sign in or create a free account at [Hugging Face](https://huggingface.co/).
-2. Create a **New Space**:
-   - **Space Name:** `allergy-wheal-api` (or your choice)
-   - **License:** MIT
-   - **Space SDK:** Select **Docker**
-   - **Docker Template:** Select **Blank**
-   - **Hardware:** Free tier (2 vCPU, 16 GB RAM)
-3. Clone your new Hugging Face Space repository locally or upload files:
+### Why Gradio SDK?
+- **100% Free**: No subscription required.
+- **FastAPI Mount**: Our `app.py` mounts the FastAPI application onto Gradio, so all REST endpoints (`/api/v1/analyze`, `/health`, `/docs`) work directly for your Next.js frontend!
+- **Free GPU Acceleration**: Choosing **ZeroGPU (Free)** gives free Nvidia A100 GPU compute during inference, reducing analysis time to under 1 second!
+
+### Quick 1-Click Deployment (PowerShell):
+We have created an automated deployment script `deploy_to_hf.ps1` in the project root that automatically clones your Space, syncs the backend files, and pushes to Hugging Face:
+
+```powershell
+.\deploy_to_hf.ps1
+```
+*(It will prompt for your Hugging Face Access Token with **WRITE** permissions from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)).*
+
+---
+
+### Manual Steps:
+1. Ensure your Space at [huggingface.co/spaces/hareshm15/allergy_wheal_api](https://huggingface.co/spaces/hareshm15/allergy_wheal_api) is set to **Public** in Space Settings (so the Next.js frontend on Vercel can reach the API without 401 Unauthorized errors).
+2. Clone your Hugging Face Space repository:
    ```bash
-   git clone https://huggingface.co/spaces/<your-username>/allergy-wheal-api
+   git clone https://huggingface.co/spaces/hareshm15/allergy_wheal_api
    ```
-4. Copy all contents of the `backend/` directory into your Space repository:
-   - `Dockerfile`
-   - `.dockerignore`
+3. Copy all files from `backend/` into `allergy_wheal_api/`:
+   - `app.py` (entry point for Gradio + FastAPI)
+   - `packages.txt` (installs system libraries `libgl1`, `libglib2.0-0` automatically)
    - `requirements.txt`
+   - `README.md`
    - `main.py`
    - `core/`
    - `routers/`
    - `services/`
-   - `scripts/`
-   - `models/`
-5. Commit and push:
+   - `scripts/` (omits large data/caches, includes `download_sam.py`)
+   - `models/` (omits the 375MB `.pth` file; `app.py` auto-downloads it on boot)
+6. Commit and push:
    ```bash
    git add .
-   git commit -m "Deploy Allergy Wheal Detection API"
+   git commit -m "Deploy WhealVision Backend"
    git push origin main
    ```
-6. Hugging Face will automatically build the Docker image (downloading the SAM ViT-B model during build) and launch the container on port `7860`.
-7. Once the build finishes, your API URL will be:
-   `https://<your-username>-allergy-wheal-api.hf.space`
-8. Verify the deployment:
-   ```bash
-   curl https://<your-username>-allergy-wheal-api.hf.space/health
-   ```
+7. Hugging Face will automatically install `packages.txt`, `requirements.txt`, launch `app.py`, and expose port `7860`.
+8. Your live public API URL will be:
+   `https://hareshm15-allergy-wheal-api.hf.space`
+9. Test the live endpoints:
+   - **Health Check:** `curl https://hareshm15-allergy-wheal-api.hf.space/health`
+   - **API Docs:** Visit `https://hareshm15-allergy-wheal-api.hf.space/docs` in your browser
+   - **Interactive Web UI:** Visit `https://hareshm15-allergy-wheal-api.hf.space/` to test image uploads directly!
+
 
 ---
 
@@ -85,9 +96,9 @@ Vercel provides seamless zero-configuration hosting for the Next.js frontend wit
    - **Framework Preset:** Next.js (detected automatically).
 5. **Set Environment Variables:**
    - Add `NEXT_PUBLIC_API_URL` with the URL of your deployed backend:
-     `NEXT_PUBLIC_API_URL = https://<your-username>-allergy-wheal-api.hf.space`
+     `NEXT_PUBLIC_API_URL = https://hareshm15-allergy-wheal-api.hf.space`
    - (Optional) Add `BACKEND_API_URL` to route requests through the Next.js `/api/analyze` proxy route to eliminate cross-origin issues:
-     `BACKEND_API_URL = https://<your-username>-allergy-wheal-api.hf.space`
+     `BACKEND_API_URL = https://hareshm15-allergy-wheal-api.hf.space`
 6. Click **Deploy**.
 7. Vercel will build the frontend and provide your live production URL (e.g., `https://cv-allergy-wheal.vercel.app`).
 
