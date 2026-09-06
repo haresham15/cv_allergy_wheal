@@ -89,7 +89,7 @@ def _mask_to_contour(mask: np.ndarray):
     
     # ── Morphological Smoothing (Shape Priors) ──
     # Create an elliptical kernel since wheals are round/elliptical
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     
     # Closing: fills small holes inside the mask
     mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, kernel)
@@ -160,9 +160,13 @@ def find_wheals(
     pts = [(float(b[1]), float(b[0]), float(b[2])) for b in blobs]
 
     # Spatial clustering (suppress point duplicates within 11px while prioritizing strong response)
+    # Border margin filter: exclude image boundary artifacts (e.g., photo edge cutoffs)
+    border_margin = 12
     candidates = []
     for p in sorted(pts, key=lambda item: -item[2]):
         cx, cy = p[0], p[1]
+        if cx < border_margin or cx > (W - border_margin) or cy < border_margin or cy > (H - border_margin):
+            continue
         # Exclude ArUco marker region
         if aruco_rect is not None:
             x1, y1, x2, y2 = aruco_rect
@@ -198,7 +202,7 @@ def find_wheals(
     min_area_px = max(config.SAM_MIN_MASK_REGION_AREA, config.MIN_WHEAL_AREA_MM2 * (ppm ** 2))
     max_area_px = config.MAX_WHEAL_AREA_MM2 * (ppm ** 2)
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     raw_results = []
 
     for i, center_pt in enumerate(candidates):
@@ -214,7 +218,7 @@ def find_wheals(
             area_px = float(np.sum(mask_binary))
 
             # Discard whole-arm/background masks or tiny speckles
-            if area_px < min_area_px or area_px > max_area_px:
+            if area_px < min_area_px or area_px > max_area_px or area_px > 3000.0:
                 continue
 
             # Smooth mask using shape prior
@@ -239,7 +243,7 @@ def find_wheals(
             diameter_px = radius * 2
             diameter_mm = diameter_px / ppm
 
-            if diameter_mm < 0.5 or diameter_mm > 45.0:
+            if diameter_mm < 1.0 or diameter_mm > 40.0:
                 continue
 
             if score > best_score:
@@ -273,13 +277,13 @@ def find_wheals(
             # Overlap IoU check
             intersection = np.logical_and(cand["mask"], kept["mask"]).sum()
             union = np.logical_or(cand["mask"], kept["mask"]).sum()
-            if union > 0 and (intersection / union) > 0.35:
+            if union > 0 and (intersection / union) > 0.30:
                 is_dup = True
                 break
             # Close centroid check (relative to wheal radius)
             dist = np.hypot(cand["center"][0] - kept["center"][0],
                             cand["center"][1] - kept["center"][1])
-            if dist < min(cand["radius"], kept["radius"]) * 0.75 and dist < 15.0:
+            if dist < min(cand["radius"], kept["radius"]) * 0.75 and dist < 18.0:
                 is_dup = True
                 break
 

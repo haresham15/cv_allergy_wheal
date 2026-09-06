@@ -48,10 +48,10 @@ SAM_CHECKPOINT_PATH = os.path.join(
 
 # SAM Inference parameters
 SAM_POINTS_PER_SIDE = 64
-SAM_PRED_IOU_THRESH = 0.60       # Calibrated for skin prick test subpart masks
+SAM_PRED_IOU_THRESH = 0.70       # Calibrated for high-precision skin prick wheal boundaries
 SAM_STABILITY_SCORE_THRESH = 0.95
 SAM_BOX_NMS_THRESH = 0.4
-SAM_MIN_MASK_REGION_AREA = 20    # Minimum mask area in pixels
+SAM_MIN_MASK_REGION_AREA = 25    # Minimum mask area in pixels (reject tiny skin speckles)
 
 # ─── Allergen Grid Defaults ──────────────────────────────────────────
 DEFAULT_GRID_ROWS = 4
