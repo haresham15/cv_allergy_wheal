@@ -69,12 +69,34 @@ except Exception:
     pass
 
 import gradio as gr
-import uvicorn
-from main import app as fastapi_app
+from gradio.routes import App
+from fastapi.middleware.cors import CORSMiddleware
+from routers.v1 import measurements
+from main import health_check
 from services.vision_pipeline import process_image
 
+# ── 1. Create FastAPI Application Instance ──
+custom_app = App(
+    title="WhealVision API",
+    description="Automated AI-powered detection and measurement of skin-prick allergy wheals",
+    version="1.0.0",
+)
 
-# ── 1. Gradio GPU Handler ──
+# Configure CORS so Vercel frontend can call endpoints without restriction
+custom_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register REST API endpoints
+custom_app.include_router(measurements.router, prefix="/api/v1")
+custom_app.get("/health")(health_check)
+
+
+# ── 2. Gradio GPU Handler ──
 @spaces.GPU(duration=120)
 def run_analysis(input_image):
     """Gradio handler: accepts numpy image, processes via vision_pipeline, returns visuals and JSON."""
@@ -120,7 +142,7 @@ def run_analysis(input_image):
     return annotated_img, segmented_img, metrics_summary
 
 
-# ── 2. Build Gradio Interactive Web Interface ──
+# ── 3. Build Gradio Interactive Web Interface ──
 with gr.Blocks(title="WhealVision API & Web Demo") as demo:
     gr.Markdown(
         """
@@ -152,11 +174,21 @@ with gr.Blocks(title="WhealVision API & Web Demo") as demo:
     )
 
 
-# ── 3. Mount Gradio onto the existing FastAPI application at root ("/") ──
-# This serves BOTH the Gradio UI at "/" and all FastAPI REST endpoints
-# (/api/v1/analyze, /health, /docs) concurrently on the same port!
-app = gr.mount_gradio_app(fastapi_app, demo, path="/")
-
+# ── 4. Launch Gradio Demo with custom_app mounted ──
+# Hugging Face ZeroGPU requires demo.launch() to discover @spaces.GPU functions!
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))
-    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
+    try:
+        demo.launch(
+            server_name="0.0.0.0",
+            server_port=port,
+            _app=custom_app,
+            prevent_thread_lock=False,
+        )
+    except TypeError:
+        # Fallback if launch() doesn't accept _app
+        demo.launch(
+            server_name="0.0.0.0",
+            server_port=port,
+            prevent_thread_lock=False,
+        )
