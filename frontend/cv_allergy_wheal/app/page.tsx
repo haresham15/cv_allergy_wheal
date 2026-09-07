@@ -8,7 +8,9 @@ interface WhealResult {
   id: number;
   allergen: string | null;
   grid_position: string | null;
+  diameter_px?: number;
   diameter_mm: number;
+  area_px?: number;
   area_mm2: number;
   severity: "normal" | "mild" | "severe";
   confidence: number;
@@ -32,6 +34,7 @@ interface AnalysisResponse {
     marker_id: number | null;
     body_region?: string | null;
     warning?: string | null;
+    needs_confirmation?: boolean;
   };
   results: WhealResult[];
   visualization: {
@@ -136,6 +139,57 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  /* ─── Client-side anatomical scale toggle ──────────────────────────── */
+  const handleToggleScale = () => {
+    if (!data || data.calibration.detected) return;
+    const currentRegion = data.calibration.body_region === "back" ? "back" : "forearm";
+    const newRegion = currentRegion === "back" ? "forearm" : "back";
+    const assumedMm = newRegion === "back" ? 320.0 : 75.0;
+    const newPpm = (data.meta.image_width * 0.75) / assumedMm;
+    const oldPpm = data.calibration.scale_ppm || 1.0;
+
+    const updatedResults = data.results.map((w) => {
+      const diamPx = w.diameter_px ?? w.diameter_mm * oldPpm;
+      const areaPx = w.area_px ?? w.area_mm2 * (oldPpm * oldPpm);
+      const diamMm = Number((diamPx / newPpm).toFixed(2));
+      const areaMm2 = Number((areaPx / (newPpm * newPpm)).toFixed(2));
+      const severity: "normal" | "mild" | "severe" =
+        diamMm <= 3.0 ? "normal" : diamMm <= 8.0 ? "mild" : "severe";
+
+      return {
+        ...w,
+        diameter_px: diamPx,
+        diameter_mm: diamMm,
+        area_px: areaPx,
+        area_mm2: areaMm2,
+        severity,
+      };
+    });
+
+    const diameters = updatedResults.map((r) => r.diameter_mm);
+    const severityCounts: Record<string, number> = { normal: 0, mild: 0, severe: 0 };
+    for (const r of updatedResults) {
+      severityCounts[r.severity] = (severityCounts[r.severity] || 0) + 1;
+    }
+
+    setData({
+      ...data,
+      calibration: {
+        ...data.calibration,
+        scale_ppm: Number(newPpm.toFixed(4)),
+        body_region: newRegion,
+        warning: `Scale manually adjusted to ${newRegion} model (~${assumedMm.toFixed(0)}mm reference).`,
+      },
+      meta: {
+        ...data.meta,
+        avg_diameter_mm: diameters.length ? Number((diameters.reduce((a, b) => a + b, 0) / diameters.length).toFixed(2)) : 0,
+        max_diameter_mm: diameters.length ? Number(Math.max(...diameters).toFixed(2)) : 0,
+        severity_breakdown: severityCounts,
+      },
+      results: updatedResults,
+    });
   };
 
   /* ─── Severity badge ─────────────────────────────────────────────── */
@@ -316,17 +370,20 @@ export default function Home() {
 
                 {/* ─── Test Site Location Selector ─── */}
                 <div style={{ marginBottom: 16 }}>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.82rem",
-                      fontWeight: 500,
-                      color: "var(--text-secondary)",
-                      marginBottom: 6,
-                    }}
-                  >
-                    Test Site Anatomical Location:
-                  </label>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <label
+                      style={{
+                        fontSize: "0.82rem",
+                        fontWeight: 500,
+                        color: "var(--text-secondary)",
+                      }}
+                    >
+                      Test Site Location (for photos without marker):
+                    </label>
+                    <span style={{ fontSize: "0.72rem", color: "#06b6d4", fontWeight: 600 }}>
+                      Recommended
+                    </span>
+                  </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     {[
                       { id: "auto", label: "Auto-detect" },
@@ -513,19 +570,43 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
-                  <div
-                    style={{
-                      fontSize: "0.78rem",
-                      padding: "4px 10px",
-                      borderRadius: "20px",
-                      background: data.calibration.detected
-                        ? "rgba(16, 185, 129, 0.15)"
-                        : "rgba(245, 158, 11, 0.15)",
-                      color: data.calibration.detected ? "#10b981" : "#f59e0b",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {data.calibration.scale_ppm.toFixed(2)} px/mm
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    {!data.calibration.detected && (
+                      <button
+                        type="button"
+                        onClick={handleToggleScale}
+                        style={{
+                          background: "rgba(245, 158, 11, 0.2)",
+                          border: "1px solid rgba(245, 158, 11, 0.5)",
+                          color: "#fbbf24",
+                          padding: "5px 12px",
+                          borderRadius: "var(--radius-sm)",
+                          cursor: "pointer",
+                          fontSize: "0.78rem",
+                          fontWeight: 600,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          transition: "var(--transition)",
+                        }}
+                      >
+                        🔄 Switch to {data.calibration.body_region === "back" ? "Forearm (~75mm)" : "Back / Torso (~320mm)"}
+                      </button>
+                    )}
+                    <div
+                      style={{
+                        fontSize: "0.78rem",
+                        padding: "4px 10px",
+                        borderRadius: "20px",
+                        background: data.calibration.detected
+                          ? "rgba(16, 185, 129, 0.15)"
+                          : "rgba(245, 158, 11, 0.15)",
+                        color: data.calibration.detected ? "#10b981" : "#f59e0b",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {data.calibration.scale_ppm.toFixed(2)} px/mm
+                    </div>
                   </div>
                 </div>
               )}

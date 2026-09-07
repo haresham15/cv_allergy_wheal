@@ -158,7 +158,9 @@ def process_image(
             "id": w.id,
             "allergen": getattr(w, "allergen", None),
             "grid_position": getattr(w, "grid_position", None),
+            "diameter_px": round(w.diameter_px, 2),
             "diameter_mm": round(w.diameter_mm, 2),
+            "area_px": round(w.area_px, 2),
             "area_mm2": round(w.area_mm2, 2),
             "severity": w.severity,
             "confidence": round(w.confidence, 3),
@@ -188,6 +190,7 @@ def process_image(
             "marker_id": cal.marker_id,
             "body_region": cal.body_region,
             "warning": cal.warning,
+            "needs_confirmation": getattr(cal, "needs_confirmation", not cal.detected),
         },
         "results": results,
         "visualization": {

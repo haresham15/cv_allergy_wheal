@@ -25,6 +25,7 @@ class CalibrationResult:
     marker_id: Optional[int] = None
     body_region: Optional[str] = None              # "forearm" | "back" | "torso"
     warning: Optional[str] = None
+    needs_confirmation: bool = False
 
 
 def detect_aruco_marker(image: np.ndarray) -> Optional[CalibrationResult]:
@@ -73,6 +74,7 @@ def detect_aruco_marker(image: np.ndarray) -> Optional[CalibrationResult]:
         marker_id=marker_id,
         body_region="calibrated",
         warning=None,
+        needs_confirmation=False,
     )
 
 
@@ -96,17 +98,39 @@ def _estimate_ppm(
         assumed_skin_width_mm = 75.0
         region = "forearm"
     else:
-        # Automatic anatomical heuristic: check skin span and aspect ratio
+        # Automatic anatomical heuristic:
+        # Forearm close-ups are taken inches away; skin occupies the whole frame with virtually no background.
+        # Back/torso shots are taken from a distance to fit the back/shoulders, leaving background margins (top/sides).
         region = "forearm"
         assumed_skin_width_mm = 75.0
+
         if skin_mask is not None and (skin_mask > 0).any():
-            contours, _ = cv2.findContours((skin_mask > 0).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if contours:
-                largest_c = max(contours, key=cv2.contourArea)
-                x, y, sw, sh = cv2.boundingRect(largest_c)
-                area_frac = cv2.contourArea(largest_c) / (h * w)
-                # Full back/torso images exhibit a wide skin expanse spanning most of the frame
-                if sw > 0.70 * w and area_frac > 0.45 and (sw / max(1, sh)) > 0.85:
+            rows_with_skin = np.where(skin_mask.any(axis=1))[0]
+            cols_with_skin = np.where(skin_mask.any(axis=0))[0]
+
+            if len(rows_with_skin) > 0 and len(cols_with_skin) > 0:
+                margin_top = rows_with_skin[0] / h
+                margin_bottom = (h - 1 - rows_with_skin[-1]) / h
+                margin_left = cols_with_skin[0] / w
+                margin_right = (w - 1 - cols_with_skin[-1]) / w
+
+                # Check corner occupancy (back shots typically leave top corners as wall/background)
+                corner_size = max(8, int(min(h, w) * 0.08))
+                tl_empty = (skin_mask[:corner_size, :corner_size] > 0).mean() < 0.15
+                tr_empty = (skin_mask[:corner_size, -corner_size:] > 0).mean() < 0.15
+
+                # Large vertical skin presence (patient torso)
+                skin_span_h = (rows_with_skin[-1] - rows_with_skin[0]) / h
+                skin_span_w = (cols_with_skin[-1] - cols_with_skin[0]) / w
+
+                # If there is meaningful background margin above or beside the body, or top corners are open room/wall:
+                is_wide_back_shot = (
+                    (margin_top >= 0.035 or margin_left >= 0.04 or margin_right >= 0.04) and skin_span_h > 0.40
+                ) or (
+                    (tl_empty and tr_empty) and skin_span_h > 0.45 and skin_span_w > 0.45
+                )
+
+                if is_wide_back_shot:
                     assumed_skin_width_mm = 320.0
                     region = "back"
 
@@ -125,6 +149,7 @@ def _estimate_ppm(
         method="estimated",
         body_region=region,
         warning=warning_msg,
+        needs_confirmation=True,
     )
 
 

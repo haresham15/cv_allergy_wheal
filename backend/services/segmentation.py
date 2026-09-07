@@ -103,7 +103,7 @@ def _mask_to_contour(mask: np.ndarray):
 
 
 def _is_wheal_shaped(contour: np.ndarray, area_px: float) -> bool:
-    """Check circularity and aspect ratio to reject non-wheal shapes."""
+    """Check circularity, aspect ratio, and solidity to reject non-wheal shapes."""
     perimeter = cv2.arcLength(contour, True)
     if perimeter == 0:
         return False
@@ -117,6 +117,13 @@ def _is_wheal_shaped(contour: np.ndarray, area_px: float) -> bool:
         aspect = max(major, minor) / (min(major, minor) + 1e-6)
         if aspect > config.MAX_ASPECT_RATIO:
             return False
+
+    # Convex hull solidity check: wheals are convex mounds; skin creases, folds, and shadows are non-convex
+    hull = cv2.convexHull(contour)
+    hull_area = cv2.contourArea(hull)
+    solidity = area_px / hull_area if hull_area > 0 else 0
+    if solidity < 0.83:
+        return False
 
     return True
 
@@ -314,13 +321,22 @@ def find_wheals(
 
     for cand in raw_results:
         is_dup = False
+        cand_area = float(cand["area_px"])
         for kept in deduped_candidates:
+            kept_area = float(kept["area_px"])
             # Overlap IoU check
-            intersection = np.logical_and(cand["mask"], kept["mask"]).sum()
-            union = np.logical_or(cand["mask"], kept["mask"]).sum()
+            intersection = float(np.logical_and(cand["mask"], kept["mask"]).sum())
+            union = float(np.logical_or(cand["mask"], kept["mask"]).sum())
             if union > 0 and (intersection / union) > 0.30:
                 is_dup = True
                 break
+
+            # Containment check: if one mask is substantially inside another (confluent merged reactions)
+            smaller_area = min(cand_area, kept_area)
+            if smaller_area > 0 and (intersection / smaller_area) > 0.75:
+                is_dup = True
+                break
+
             # Close centroid check (relative to wheal radius)
             dist = np.hypot(cand["center"][0] - kept["center"][0],
                             cand["center"][1] - kept["center"][1])

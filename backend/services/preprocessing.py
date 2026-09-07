@@ -28,6 +28,10 @@ def extract_skin_mask(image_bgr: np.ndarray) -> np.ndarray:
     # HSV skin region: H in [0, 50] (red, orange, peach, and brown tones)
     mask_hsv = cv2.inRange(hsv, np.array([0, 18, 35], dtype=np.uint8), np.array([50, 255, 255], dtype=np.uint8))
 
+    # Reject specular metal reflections / glossy furniture highlights (very high V with low S)
+    specular_metal = cv2.inRange(hsv, np.array([0, 0, 235], dtype=np.uint8), np.array([180, 28, 255], dtype=np.uint8))
+    mask_hsv = cv2.bitwise_and(mask_hsv, cv2.bitwise_not(specular_metal))
+
     # Combine color masks
     combined = cv2.bitwise_and(mask_ycrcb, mask_hsv)
 
@@ -48,6 +52,10 @@ def extract_skin_mask(image_bgr: np.ndarray) -> np.ndarray:
             c_area = cv2.contourArea(c)
             if c_area >= max(3000, 0.05 * max_area):
                 cv2.drawContours(skin_clean, [c], -1, 255, -1)  # Fill contour completely
+
+    # Erode inward by 8-10px to eliminate boundary contact with furniture, metal chair frames, and clothing
+    erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    skin_clean = cv2.erode(skin_clean, erode_kernel, iterations=1)
 
     # Fallback safety: if skin detection finds less than 5% of the frame, assume full frame
     if (skin_clean > 0).sum() < 0.05 * total_area:
